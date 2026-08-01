@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f4eddf"/>
+  <rect x="0" y="0" width="1200" height="28" fill="#ff3b20"/>
+  <rect x="62" y="62" width="1076" height="506" fill="#151515"/>
+  <text x="104" y="120" fill="#f4eddf" font-family="monospace" font-size="22" font-weight="700">OFFICE OF FOUNDER AFFAIRS</text>
+  <text x="104" y="245" fill="#f4eddf" font-family="Impact, Arial Narrow, sans-serif" font-size="104" font-weight="900">FUCK MY</text>
+  <text x="104" y="344" fill="#ff3b20" font-family="Impact, Arial Narrow, sans-serif" font-size="104" font-weight="900">COFOUNDER</text>
+  <rect x="104" y="391" width="746" height="4" fill="#d8ff3e"/>
+  <text x="104" y="445" fill="#f4eddf" font-family="Arial, sans-serif" font-size="31" font-weight="700">Some startups need a pivot.</text>
+  <text x="104" y="488" fill="#f4eddf" font-family="Arial, sans-serif" font-size="31" font-weight="700">Some need an incident report.</text>
+  <rect x="867" y="385" width="225" height="95" fill="#ff3b20" transform="rotate(-3 980 433)"/>
+  <text x="979" y="424" text-anchor="middle" fill="#151515" font-family="monospace" font-size="18" font-weight="900" transform="rotate(-3 979 424)">FILE THE VIBES</text>
+  <text x="979" y="452" text-anchor="middle" fill="#151515" font-family="monospace" font-size="18" font-weight="900" transform="rotate(-3 979 452)">→</text>
+  <text x="104" y="536" fill="#8d887e" font-family="monospace" font-size="16">FUCKMYCOFOUNDER.COM · PARODY, OBVIOUSLY</text>
+</svg>
