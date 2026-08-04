@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { decodeReportFragment, encodeReport } from "../assets/js/modules/codec.js";
 import { buildReport } from "../assets/js/modules/report.js";
-import { validateStatement } from "../assets/js/modules/validation.js";
+import { validateStatement, clampFieldValue, FIELD_LIMITS } from "../assets/js/modules/validation.js";
 
 const payload = {
   chargeId: "quick-sync",
@@ -33,6 +33,12 @@ test("redaction checks reject common identifiers", () => {
   assert.match(validateStatement("incident", "posted it at https:\/\/example.com"), /link/u);
   assert.match(validateStatement("incident", "slacked @definitely_a_person"), /@handle/u);
   assert.equal(validateStatement("incident", payload.incident), "");
+});
+
+test("field values clamp to their character caps", () => {
+  assert.equal(clampFieldValue("incident", "a".repeat(200)).length, FIELD_LIMITS.incident);
+  assert.equal(clampFieldValue("quote", "b".repeat(200)).length, FIELD_LIMITS.quote);
+  assert.equal(clampFieldValue("translation", "c".repeat(200)).length, FIELD_LIMITS.translation);
 });
 
 test("malformed and oversized fragments fail closed", () => {

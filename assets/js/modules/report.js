@@ -1,4 +1,5 @@
 import { CHARGES, DISPOSITIONS, SEVERITIES } from "./content.js";
+import { fitCaseFileFields } from "./text-fit.js";
 import { normalizeText } from "./validation.js";
 
 function hashText(value) {
@@ -42,6 +43,10 @@ export function renderReport(report, root) {
 
   for (const [selector, text] of Object.entries(fields)) {
     const element = root.querySelector(selector);
-    if (element) element.textContent = text;
+    if (element) {
+      element.style.fontSize = "";
+      element.textContent = text;
+    }
   }
+  requestAnimationFrame(() => fitCaseFileFields(root));
 }

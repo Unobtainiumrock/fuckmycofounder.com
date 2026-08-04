@@ -118,7 +118,7 @@
         <form class="report-form" data-report-form novalidate>
           <section class="form-step is-active" data-step="1" aria-labelledby="step-one-title">
             <p class="form-kicker">SECTION A / NATURE OF THE NONSENSE</p>
-            <h3 id="step-one-title">What are we charging the vibes with?</h3>
+            <h3 id="step-one-title">What are you reporting?</h3>
             <fieldset class="charge-grid" data-charge-grid>
               <legend class="sr-only">Choose one cofounder offense</legend>
             </fieldset>
@@ -131,9 +131,6 @@
           <section class="form-step" data-step="2" aria-labelledby="step-two-title" hidden>
             <p class="form-kicker">SECTION B / THE HEAVILY REDACTED LORE</p>
             <h3 id="step-two-title">Give us the board-safe version.</h3>
-            <div class="privacy-note">
-              <strong>Redaction oath:</strong> No names, company names, @handles, emails, links, phone numbers, or identifying details. Make it funny; make it unfindable.
-            </div>
             <label class="field">
               <span>My cofounder…</span>
               <textarea name="incident" rows="3" maxlength="180" required placeholder="called a 6 a.m. all-hands to unveil the exact idea we rejected yesterday"></textarea>
@@ -152,11 +149,29 @@
               <small><span data-count="translation">0</span>/80</small>
               <span class="field-error" data-error="translation" role="alert"></span>
             </label>
-            <label class="check-field">
-              <input name="redacted" type="checkbox" required>
-              <span>I removed identifying details and understand this is parody, not a public accusation.</span>
-            </label>
-            <p class="field-error" data-error="redacted" role="alert"></p>
+
+            <div class="case-preview" data-case-preview-wrap hidden>
+              <p class="form-kicker">LIVE CASE FILE PREVIEW</p>
+              <article class="case-file" data-case-preview aria-label="Live case file preview">
+                <div class="case-file__topline">
+                  <span>F/MC INCIDENT REPORT</span>
+                  <span data-report-id>CASE #000000</span>
+                </div>
+                <div class="case-file__stamp" data-report-severity>SEVERITY: SERIES B</div>
+                <dl>
+                  <div><dt>CHARGE</dt><dd data-report-charge></dd></div>
+                  <div><dt>STATEMENT</dt><dd data-report-incident></dd></div>
+                  <div><dt>THEIR DEFENSE</dt><dd data-report-quote></dd></div>
+                  <div><dt>ADULT TRANSLATION</dt><dd data-report-translation></dd></div>
+                </dl>
+                <footer>
+                  <span>BOARD DISPOSITION</span>
+                  <strong data-report-disposition></strong>
+                  <small>fuckmycofounder.com · satire, obviously</small>
+                </footer>
+              </article>
+            </div>
+
             <div class="form-actions">
               <button class="button button--outline" type="button" data-back="1">← Back</button>
               <button class="button button--red" type="submit">Generate case file ↗</button>
@@ -167,7 +182,7 @@
             <div class="result-heading">
               <div>
                 <p class="form-kicker">SECTION C / OFFICIAL-ISH FINDINGS</p>
-                <h3 id="step-three-title">The board has reviewed the vibes.</h3>
+                <h3 id="step-three-title">The board has seen enough.</h3>
               </div>
               <button class="text-button" type="button" data-start-over>Start over</button>
             </div>
@@ -196,7 +211,6 @@
               <button class="button button--outline" type="button" data-download-report>Download card</button>
               <button class="button button--outline" type="button" data-copy-link>Copy private-ish link</button>
             </div>
-            <p class="share-note">*The “evidence” is a joke you typed yourself. Shared links contain the redacted text after the # and do not send it to our server.</p>
             <div class="toast" data-toast role="status" aria-live="polite"></div>
           </section>
         </form>

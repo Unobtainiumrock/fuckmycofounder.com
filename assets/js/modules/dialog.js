@@ -2,13 +2,15 @@ import { CHARGES } from "./content.js";
 import { decodeReportFragment } from "./codec.js";
 import { buildReport, renderReport } from "./report.js";
 import { copyReportLink, downloadReportCard, shareReport } from "./share.js";
-import { normalizeText, validateStatement } from "./validation.js";
+import { clampFieldValue, enforceFieldLimit, FIELD_LIMITS, normalizeText, validateStatement } from "./validation.js";
 
 export function initializeReportDialog() {
   const dialog = document.querySelector("[data-report-dialog]");
   const form = dialog.querySelector("[data-report-form]");
   const chargeGrid = dialog.querySelector("[data-charge-grid]");
   const toast = dialog.querySelector("[data-toast]");
+  const previewWrap = dialog.querySelector("[data-case-preview-wrap]");
+  const previewRoot = dialog.querySelector("[data-case-preview]");
   let currentReport = null;
 
   function buildCharges() {
@@ -51,10 +53,24 @@ export function initializeReportDialog() {
     const data = new FormData(form);
     return {
       chargeId: String(data.get("charge") ?? ""),
-      incident: normalizeText(String(data.get("incident") ?? "")),
-      quote: normalizeText(String(data.get("quote") ?? "")),
-      translation: normalizeText(String(data.get("translation") ?? ""))
+      incident: clampFieldValue("incident", normalizeText(String(data.get("incident") ?? ""))),
+      quote: clampFieldValue("quote", normalizeText(String(data.get("quote") ?? ""))),
+      translation: clampFieldValue("translation", normalizeText(String(data.get("translation") ?? "")))
     };
+  }
+
+  function updateFieldCounter(field) {
+    const counter = dialog.querySelector(`[data-count="${field.name}"]`);
+    if (counter) counter.textContent = String(field.value.length);
+  }
+
+  function updateLivePreview() {
+    if (!previewWrap || !previewRoot) return;
+    const payload = collectPayload();
+    const hasDraft = payload.chargeId && (payload.incident || payload.quote || payload.translation);
+    previewWrap.hidden = !hasDraft;
+    if (!hasDraft) return;
+    renderReport(buildReport(payload), previewRoot);
   }
 
   function validateForm(payload) {
@@ -64,10 +80,6 @@ export function initializeReportDialog() {
       const error = validateStatement(name, payload[name]);
       dialog.querySelector(`[data-error="${name}"]`).textContent = error;
       if (error) valid = false;
-    }
-    if (!form.elements.redacted.checked) {
-      dialog.querySelector('[data-error="redacted"]').textContent = "The redaction oath is required.";
-      valid = false;
     }
     return valid;
   }
@@ -84,6 +96,7 @@ export function initializeReportDialog() {
     currentReport = null;
     clearErrors();
     form.querySelectorAll("[data-count]").forEach((counter) => { counter.textContent = "0"; });
+    if (previewWrap) previewWrap.hidden = true;
     history.replaceState(null, "", `${location.pathname}${location.search}`);
     showStep(1);
   }
@@ -117,14 +130,51 @@ export function initializeReportDialog() {
   dialog.querySelector('[data-next="2"]').addEventListener("click", () => {
     const selected = form.elements.charge.value;
     dialog.querySelector("[data-charge-error]").textContent = selected ? "" : "Pick one count of cofounder nonsense.";
-    if (selected) showStep(2);
+    if (selected) {
+      showStep(2);
+      updateLivePreview();
+    }
   });
   dialog.querySelector('[data-back="1"]').addEventListener("click", () => showStep(1));
   dialog.querySelector("[data-start-over]").addEventListener("click", resetReport);
 
+  form.addEventListener("paste", (event) => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    const limit = FIELD_LIMITS[field.name];
+    if (!limit) return;
+
+    event.preventDefault();
+    const paste = event.clipboardData?.getData("text") ?? "";
+    const start = field.selectionStart ?? field.value.length;
+    const end = field.selectionEnd ?? field.value.length;
+    field.value = clampFieldValue(field.name, `${field.value.slice(0, start)}${paste}${field.value.slice(end)}`);
+    const cursor = Math.min(start + paste.length, field.value.length);
+    field.setSelectionRange(cursor, cursor);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  form.addEventListener("beforeinput", (event) => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    const limit = FIELD_LIMITS[field.name];
+    if (!limit || event.inputType.startsWith("delete")) return;
+
+    const value = field.value;
+    const start = field.selectionStart ?? value.length;
+    const end = field.selectionEnd ?? value.length;
+    const insertion = event.data ?? "";
+    const nextLength = value.slice(0, start).length + insertion.length + value.slice(end).length;
+    if (nextLength > limit) event.preventDefault();
+  });
+
   form.addEventListener("input", (event) => {
-    const counter = dialog.querySelector(`[data-count="${event.target.name}"]`);
-    if (counter) counter.textContent = String(event.target.value.length);
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    if (!FIELD_LIMITS[field.name]) return;
+    enforceFieldLimit(field);
+    updateFieldCounter(field);
+    updateLivePreview();
   });
 
   form.addEventListener("submit", (event) => {

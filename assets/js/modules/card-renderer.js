@@ -1,29 +1,8 @@
+import { drawCanvasLines, fitCanvasSection } from "./text-fit.js";
+
 const WIDTH = 1200;
 const HEIGHT = 1500;
 const COLORS = { paper: "#f4eddf", ink: "#151515", red: "#ff3b20", acid: "#d8ff3e" };
-
-function wrapLines(context, text, maxWidth) {
-  const words = text.split(/\s+/u);
-  const lines = [];
-  let current = "";
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (context.measureText(candidate).width <= maxWidth || !current) current = candidate;
-    else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function drawWrapped(context, text, x, y, maxWidth, lineHeight, maxLines = 4) {
-  const lines = wrapLines(context, text, maxWidth).slice(0, maxLines);
-  lines.forEach((line, index) => context.fillText(line, x, y + index * lineHeight));
-  return y + lines.length * lineHeight;
-}
 
 function label(context, text, x, y) {
   context.fillStyle = "rgba(244,237,223,.62)";
@@ -69,18 +48,19 @@ export async function renderCardBlob(report) {
   const left = 72;
   const max = WIDTH - 144;
   const sections = [
-    ["CHARGE", report.charge, 46, 56, 2],
-    ["STATEMENT", `My cofounder ${report.incident}.`, 37, 48, 4],
-    ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 3],
-    ["ADULT TRANSLATION", report.translation, 37, 48, 3]
+    ["CHARGE", report.charge, 46, 56, 2, 30],
+    ["STATEMENT", `My cofounder ${report.incident}.`, 37, 48, 5, 24],
+    ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 4, 24],
+    ["ADULT TRANSLATION", report.translation, 37, 48, 3, 24]
   ];
 
-  for (const [heading, text, size, lineHeight, maxLines] of sections) {
+  for (const [heading, text, baseSize, lineHeight, maxLines, minSize] of sections) {
     label(context, heading, left, y);
     y += 48;
     context.fillStyle = COLORS.paper;
-    context.font = `700 ${size}px Arial, sans-serif`;
-    y = drawWrapped(context, text, left, y, max, lineHeight, maxLines) + 38;
+    const fitted = fitCanvasSection(context, text, max, baseSize, minSize, maxLines, lineHeight);
+    context.font = fitted.font;
+    y = drawCanvasLines(context, fitted.lines, left, y, lineHeight) + 38;
     context.strokeStyle = "rgba(244,237,223,.16)";
     context.beginPath();
     context.moveTo(left, y - 15);
@@ -93,8 +73,18 @@ export async function renderCardBlob(report) {
   context.fillRect(left, footerTop, WIDTH - left * 2, 5);
   label(context, "BOARD DISPOSITION", left, footerTop + 55);
   context.fillStyle = COLORS.acid;
-  context.font = "900 61px Impact, Arial Narrow, sans-serif";
-  drawWrapped(context, report.disposition.toUpperCase(), left, footerTop + 125, max, 67, 3);
+  const disposition = fitCanvasSection(
+    context,
+    report.disposition.toUpperCase(),
+    max,
+    61,
+    34,
+    3,
+    67,
+    (size) => `900 ${size}px Impact, Arial Narrow, sans-serif`
+  );
+  context.font = disposition.font;
+  drawCanvasLines(context, disposition.lines, left, footerTop + 125, 67);
   context.fillStyle = "rgba(244,237,223,.62)";
   context.font = "700 24px monospace";
   context.fillText("FUCKMYCOFOUNDER.COM  ·  SATIRE, OBVIOUSLY", left, HEIGHT - 67);
