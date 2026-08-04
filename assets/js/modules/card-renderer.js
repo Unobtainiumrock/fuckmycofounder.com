@@ -127,7 +127,6 @@ export async function renderCardBlob(report) {
     report.disposition.toUpperCase(),
     max,
     80,
-    61,
     34,
     3,
     67,

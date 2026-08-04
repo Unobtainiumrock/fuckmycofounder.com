@@ -125,7 +125,9 @@ export function initializeReportDialog() {
 
   function displayReport(report) {
     currentReport = report;
-    renderReport(report, dialog);
+    // Render into the result card specifically: the dialog also contains the
+    // live-preview card, whose duplicate data-report-* nodes come first in DOM order.
+    renderReport(report, dialog.querySelector("[data-case-file]"));
     showStep(3);
     openDialog();
     if (report.persisted) {
