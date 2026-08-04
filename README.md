@@ -4,16 +4,23 @@ A dependency-free static satire site and privacy-first cofounder incident-report
 
 ## Production deploys
 
-Pushes to `main` auto-deploy to Cloudflare Pages via [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml) (tests → `wrangler pages deploy`). Manual ship:
+Pushes to `main` auto-deploy to Cloudflare Pages via [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml) (tests → `npm run build` → `wrangler pages deploy dist`). Manual ship:
 
 ```bash
 export CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=c982ff5aa7f77c62715b25611839a9ff
-npx wrangler pages deploy . --project-name=fuckmycofounder --branch=main
+npm run build
+npx wrangler pages deploy dist --project-name=fuckmycofounder --branch=main
 ```
 
 Required GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
-Asset caching is controlled by [`_headers`](_headers): HTML always revalidates; JS/CSS use a 60s TTL so deploys don’t leave browsers on mismatched HTML+JS.
+### Asset fingerprinting
+
+`npm run build` ([`scripts/build.mjs`](scripts/build.mjs)) copies the site into `dist/` with every JS and CSS file renamed to `name.<content-hash>.ext`, rewriting each import specifier and `<link>`/`<script>` reference to match. Hashes are computed leaves-first, so editing a deep module (`shared/case-limits.js`, `report.js`) also changes the hash of everything that imports it — the whole graph busts, not just the entry point.
+
+That makes every URL content-addressed, so [`_headers`](_headers) can mark JS/CSS `immutable` and no deploy can leave a browser on a stale module. HTML always revalidates; images and icons keep stable filenames because their URLs appear in social-preview metadata.
+
+Never hand-write a `?v=` query string on an import; the build owns cache busting.
 
 ## Local preview
 
@@ -21,7 +28,7 @@ Asset caching is controlled by [`_headers`](_headers): HTML always revalidates; 
 python3 -m http.server 4173
 ```
 
-Open `http://127.0.0.1:4173`. Static assets have no build step. Persisted cases (optional mugshots + PNG cards) require Cloudflare Pages Functions with KV and R2 bindings.
+Open `http://127.0.0.1:4173`. The source tree runs unbuilt — references are unhashed, so edits show up on reload. Persisted cases (optional mugshots + PNG cards) require Cloudflare Pages Functions with KV and R2 bindings.
 
 ### Cloudflare bindings (one-time)
 
@@ -44,4 +51,5 @@ npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2
 - `assets/js/modules/` — copy, validation, report generation, card rendering, sharing, and UI flow
 - `functions/` — Pages Functions for case persistence (KV + R2) and the Town Board feed (`GET /api/feed?limit=&cursor=`, `POST /api/cases/:id/publish`)
 - `shared/` — validation limits shared by client and edge handlers
+- `scripts/` — the fingerprinting build that emits `dist/`
 - `assets/images/` and `assets/icons/` — social preview and favicon

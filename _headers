@@ -5,13 +5,16 @@
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
 
-# Fingerprint-less JS/CSS: short TTL so rapid deploys don't strand clients
-# on HTML/JS mismatches (e.g. removed form fields + stale validators).
+# JS/CSS filenames carry a content hash (see scripts/build.mjs), so a changed
+# file is always a new URL and these can never go stale.
 /assets/js/*
-  Cache-Control: public, max-age=60, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
 
 /assets/css/*
-  Cache-Control: public, max-age=60, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
+
+/shared/*
+  Cache-Control: public, max-age=31536000, immutable
 
 /assets/images/*
   Cache-Control: public, max-age=86400, must-revalidate
