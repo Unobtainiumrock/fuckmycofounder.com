@@ -42,6 +42,6 @@ npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2
 - `index.html` — semantic page shell and report dialog
 - `assets/css/` — reset, tokens, shared components, and page layout
 - `assets/js/modules/` — copy, validation, report generation, card rendering, sharing, and UI flow
-- `functions/` — Pages Functions for case persistence (KV + R2)
+- `functions/` — Pages Functions for case persistence (KV + R2) and the Town Board feed (`GET /api/feed?limit=&cursor=`, `POST /api/cases/:id/publish`)
 - `shared/` — validation limits shared by client and edge handlers
 - `assets/images/` and `assets/icons/` — social preview and favicon

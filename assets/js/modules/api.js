@@ -40,3 +40,8 @@ export async function fetchCase(id) {
   const response = await fetch(`${API_ROOT}/cases/${id}`);
   return readJson(response);
 }
+
+export async function publishCase(id) {
+  const response = await fetch(`${API_ROOT}/cases/${id}/publish`, { method: "POST" });
+  return readJson(response);
+}

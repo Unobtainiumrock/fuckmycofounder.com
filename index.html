@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="/assets/css/base.css">
     <link rel="stylesheet" href="/assets/css/components.css">
     <link rel="stylesheet" href="/assets/css/home.css">
-    <script type="module" src="/assets/js/app.js?v=20260804d"></script>
+    <script type="module" src="/assets/js/app.js?v=20260804e"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip the founder lore</a>
@@ -91,6 +91,29 @@
           <li><span>02</span><strong>Remove the identifiers</strong><small>No names, handles, links, companies, or courtroom exhibits.</small></li>
           <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a link with the mugshot attached.</small></li>
         </ol>
+      </section>
+
+      <section class="board" id="town-board" aria-labelledby="board-title" data-board>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PUBLIC RECORD / VIBES JURISDICTION</p>
+            <h2 id="board-title">The Town Board</h2>
+          </div>
+          <p class="board__status" data-board-status role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="board__locked" data-board-locked>
+          <p class="board__locked-stamp" aria-hidden="true">SEALED</p>
+          <p class="board__locked-copy">The board shows you the receipts after you file your own. Generate a case file, hit <strong>Share the evidence</strong>, and the public record unseals.</p>
+          <button class="button button--red" type="button" data-start-report>File your report <span aria-hidden="true">→</span></button>
+        </div>
+
+        <div class="board__feed" data-board-feed hidden></div>
+        <div class="board__more">
+          <button class="button button--outline" type="button" data-board-more hidden>Load more filings</button>
+          <p class="board__end" data-board-end hidden>End of the public record. For now.</p>
+        </div>
+        <div data-board-sentinel aria-hidden="true"></div>
       </section>
 
     </main>
@@ -237,6 +260,7 @@
               <button class="button button--outline" type="button" data-download-report>Download card</button>
               <button class="button button--outline" type="button" data-copy-link>Copy private-ish link</button>
             </div>
+            <p class="share-note">*Sharing also posts your case file to the public Town Board. Still no names, still satire.</p>
             <div class="toast" data-toast role="status" aria-live="polite"></div>
           </section>
         </form>
