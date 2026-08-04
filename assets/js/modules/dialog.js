@@ -3,6 +3,7 @@ import { createCase, fetchCase, isApiAvailable, uploadCaseCard } from "./api.js"
 import { decodeCaseFragment, decodeReportFragment, parseCasePath } from "./codec.js";
 import { avatarPreviewUrl, fileToAvatarBlob } from "./avatar.js";
 import { buildReport, renderReport } from "./report.js";
+import { markStoryShared } from "./feed.js";
 import { copyReportLink, downloadReportCard, shareReport } from "./share.js";
 import { clampFieldValue, enforceFieldLimit, FIELD_LIMITS, normalizeText, validateStatement } from "./validation.js";
 
@@ -175,6 +176,8 @@ export function initializeReportDialog() {
       cardUrl: data.cardUrl,
       persisted: true
     }));
+    // Revisiting a published case link also unseals the Town Board.
+    if (data.publishedAt) markStoryShared(data.id);
   }
 
   async function withBusy(button, action) {

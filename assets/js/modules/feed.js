@@ -1,3 +1,5 @@
+import { fetchCase } from "./api.js";
+import { normalizeCaseId } from "./codec.js";
 import { buildReport } from "./report.js";
 
 const PAGE_LIMIT = 12;
@@ -18,7 +20,29 @@ export function markStoryShared(caseId) {
   } catch {
     // Private mode: the gate simply stays session-local.
   }
-  document.dispatchEvent(new CustomEvent(STORY_SHARED_EVENT));
+  document.dispatchEvent(new CustomEvent(STORY_SHARED_EVENT, { detail: { caseId } }));
+}
+
+/** Verify a published case and unseal the Town Board for this browser. */
+export async function reclaimBoardAccess(rawId) {
+  const id = normalizeCaseId(rawId);
+  if (!id) {
+    throw new Error("Enter a case id like FMC-ABC2345.");
+  }
+
+  let data;
+  try {
+    data = await fetchCase(id);
+  } catch {
+    throw new Error("That case file expired or never existed.");
+  }
+
+  if (!data.publishedAt) {
+    throw new Error("Filed, but not posted yet. Hit Share the evidence first.");
+  }
+
+  markStoryShared(id);
+  return id;
 }
 
 function formatDate(iso) {
@@ -85,6 +109,10 @@ export function initializeBoard() {
   const moreButton = board.querySelector("[data-board-more]");
   const endNote = board.querySelector("[data-board-end]");
   const sentinel = board.querySelector("[data-board-sentinel]");
+  const reclaimForm = board.querySelector("[data-board-reclaim]");
+  const reclaimInput = board.querySelector("[data-board-reclaim-input]");
+  const reclaimError = board.querySelector("[data-board-reclaim-error]");
+  const reclaimButton = board.querySelector("[data-board-reclaim-submit]");
 
   let cursor = null;
   let complete = false;
@@ -140,6 +168,24 @@ export function initializeBoard() {
       if (unlocked && entries.some(({ isIntersecting }) => isIntersecting)) loadPage();
     }, { rootMargin: "600px 0px" }).observe(sentinel);
   }
+
+  reclaimForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!reclaimInput || !reclaimButton) return;
+    if (reclaimError) reclaimError.textContent = "";
+    reclaimButton.disabled = true;
+    const original = reclaimButton.textContent;
+    reclaimButton.textContent = "Checking the docket…";
+    try {
+      await reclaimBoardAccess(reclaimInput.value);
+      reclaimInput.value = "";
+    } catch (error) {
+      if (reclaimError) reclaimError.textContent = error?.message ?? "Could not unseal the board.";
+    } finally {
+      reclaimButton.disabled = false;
+      reclaimButton.textContent = original;
+    }
+  });
 
   document.addEventListener(STORY_SHARED_EVENT, unlock);
   if (hasSharedStory()) unlock();

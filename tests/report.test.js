@@ -5,7 +5,7 @@ import { decodeCaseFragment, decodeReportFragment, encodeReport, parseCasePath }
 import { AVATAR_SIZE, ACCEPTED_TYPES } from "../assets/js/modules/avatar.js";
 import { buildReport } from "../assets/js/modules/report.js";
 import { validateStatement, clampFieldValue, FIELD_LIMITS } from "../assets/js/modules/validation.js";
-import { validateCasePayload } from "../shared/case-limits.js";
+import { normalizeCaseId, validateCasePayload } from "../shared/case-limits.js";
 
 const payload = {
   chargeId: "quick-sync",
@@ -30,6 +30,16 @@ test("case fragments and paths decode persisted ids", () => {
   assert.equal(decodeCaseFragment("#c=not-valid"), null);
   assert.equal(parseCasePath("/c/FMC-ABC2345"), "FMC-ABC2345");
   assert.equal(parseCasePath("/"), null);
+});
+
+test("board keys normalize from loose human input", () => {
+  assert.equal(normalizeCaseId("fmc-abc2345"), "FMC-ABC2345");
+  assert.equal(normalizeCaseId("CASE #FMC-ABC2345"), "FMC-ABC2345");
+  assert.equal(normalizeCaseId("#FMC-ABC2345"), "FMC-ABC2345");
+  assert.equal(normalizeCaseId("CASE FMC-ABC2345"), "FMC-ABC2345");
+  assert.equal(normalizeCaseId("not-a-case"), null);
+  assert.equal(normalizeCaseId("FMC-TOOSHORT"), null);
+  assert.equal(normalizeCaseId("FMC-ABC!!!!"), null);
 });
 
 test("generated reports are deterministic", () => {

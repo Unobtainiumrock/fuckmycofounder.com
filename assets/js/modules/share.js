@@ -51,7 +51,7 @@ export async function shareReport(report) {
     try {
       await publishCase(report.id);
       markStoryShared(report.id);
-      boardNote = "Posted to the Town Board. ";
+      boardNote = `Posted to the Town Board. Board key: ${report.id}. `;
     } catch {
       // Board post failing should never block the native share.
     }
@@ -68,12 +68,12 @@ export async function shareReport(report) {
 
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({ ...shareData, files: [file] });
-    return `${boardNote}Shared. The board denies involvement.`;
+    return `${boardNote}Shared. Keep that board key to reopen the record later.`;
   }
   if (navigator.share) {
     await navigator.share(shareData);
-    return `${boardNote}Shared. The board denies involvement.`;
+    return `${boardNote}Shared. Keep that board key to reopen the record later.`;
   }
   await navigator.clipboard.writeText(url);
-  return `${boardNote}Link copied. Paste it somewhere emotionally expensive.`;
+  return `${boardNote}Link copied. Keep the board key if you refresh or switch phones.`;
 }

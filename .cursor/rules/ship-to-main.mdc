@@ -1,0 +1,23 @@
+---
+description: Always land completed work on main and let production auto-deploy
+alwaysApply: true
+---
+
+# Ship completed work to main
+
+For this repo, **do not leave finished product changes sitting uncommitted** or ask whether to ship after the work is done.
+
+Default shipping path:
+
+1. When the requested work is complete and tests you ran are green, **commit on `main`**.
+2. **Push to `origin/main`** so `.github/workflows/deploy-production.yml` auto-deploys.
+3. Confirm the Actions run / that production reflects the change when relevant.
+4. Do **not** open a PR, wait for a separate "want me to commit?" prompt, or park shippable work on a long-lived branch unless the user explicitly asks for a PR/branch workflow for that change.
+
+Exceptions (only when the user says so, or the change is clearly not product-ready):
+
+- WIP / exploratory spikes the user asked to keep local
+- Secrets, credentials, or generated junk that must not be committed
+- Destructive git history rewrites (still require explicit user request)
+
+If commit hooks reject the commit, fix and create a **new** commit — do not `--no-verify` unless the user explicitly asks.

@@ -34,6 +34,7 @@ export function publicCase(env, request, record) {
     translation: record.translation,
     avatarUrl: urls.avatarUrl,
     cardUrl: urls.cardUrl,
-    createdAt: record.createdAt
+    createdAt: record.createdAt,
+    publishedAt: record.publishedAt ?? null
   };
 }

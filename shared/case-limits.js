@@ -17,6 +17,13 @@ export const CHARGE_IDS = new Set([
 
 export const CASE_ID_PATTERN = /^FMC-[A-Z2-7]{7}$/u;
 
+/** Accept "FMC-…", "CASE #FMC-…", or "#FMC-…" and return a canonical id or null. */
+export function normalizeCaseId(value) {
+  if (typeof value !== "string") return null;
+  const cleaned = value.trim().toUpperCase().replace(/^CASE\s*#?\s*/u, "").replace(/^#/u, "");
+  return CASE_ID_PATTERN.test(cleaned) ? cleaned : null;
+}
+
 export const MAX_AVATAR_BYTES = 80 * 1024;
 export const MAX_CARD_BYTES = 500 * 1024;
 export const AVATAR_SIZE = 256;
