@@ -4,6 +4,7 @@ import { buildReport } from "./report.js";
 
 const PAGE_LIMIT = 12;
 const STORAGE_KEY = "fmc:shared-case";
+export const BOARD_PATH = "/board";
 export const STORY_SHARED_EVENT = "fmc:story-shared";
 
 export function hasSharedStory() {

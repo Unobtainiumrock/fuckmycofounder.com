@@ -338,5 +338,11 @@ export function initializeReportDialog() {
       toast.textContent = "That case file expired or never existed.";
       openDialog();
     });
+    return;
+  }
+
+  if (new URLSearchParams(location.search).has("report")) {
+    history.replaceState(null, "", "/");
+    openDialog();
   }
 }

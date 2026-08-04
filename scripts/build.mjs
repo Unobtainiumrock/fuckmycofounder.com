@@ -23,7 +23,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 // fingerprinted alongside the client bundle.
 const SCRIPT_DIRS = ["assets/js", "shared"];
 const STYLE_DIR = "assets/css";
-const COPY_FILES = ["index.html", "404.html", "CNAME", "robots.txt", "sitemap.xml", "_headers"];
+const COPY_FILES = ["index.html", "board/index.html", "404.html", "CNAME", "robots.txt", "sitemap.xml", "_headers"];
 const COPY_DIRS = ["assets/images", "assets/icons"];
 
 const HTML_ASSET_REFERENCE = /\/(assets\/(?:js|css)\/[\w./-]+\.(?:js|css))(\?[^"'\s>]*)?/g;

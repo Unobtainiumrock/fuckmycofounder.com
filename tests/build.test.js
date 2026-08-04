@@ -53,14 +53,16 @@ test("every script and stylesheet is emitted under a content-hashed name", async
 
 test("built html only references files that exist in the build", async (t) => {
   const { outDir } = await buildTo(t);
-  const html = await fs.readFile(path.join(outDir, "index.html"), "utf8");
-  const references = [...html.matchAll(HTML_REFERENCE)].map(([, reference]) => reference);
+  for (const page of ["index.html", "board/index.html"]) {
+    const html = await fs.readFile(path.join(outDir, page), "utf8");
+    const references = [...html.matchAll(HTML_REFERENCE)].map(([, reference]) => reference);
 
-  assert.ok(references.some((reference) => reference.endsWith(".js")));
-  for (const reference of references) {
-    await fs.access(path.join(outDir, reference));
-    const stable = reference.startsWith("/assets/images/") || reference.startsWith("/assets/icons/");
-    assert.ok(stable || HASHED_NAME.test(reference), `${reference} is served without a content hash`);
+    assert.ok(references.some((reference) => reference.endsWith(".js")), `${page} missing script`);
+    for (const reference of references) {
+      await fs.access(path.join(outDir, reference));
+      const stable = reference.startsWith("/assets/images/") || reference.startsWith("/assets/icons/");
+      assert.ok(stable || HASHED_NAME.test(reference), `${page} serves unhashed ${reference}`);
+    }
   }
 });
 
