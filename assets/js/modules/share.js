@@ -3,7 +3,7 @@ import { encodeReport } from "./codec.js";
 import { markStoryShared } from "./feed.js";
 
 async function renderCard(report) {
-  const { renderCardBlob } = await import("./card-renderer.js");
+  const { renderCardBlob } = await import("./card-renderer.js?v=20260804f");
   return renderCardBlob(report);
 }
 

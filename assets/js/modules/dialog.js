@@ -156,7 +156,7 @@ export function initializeReportDialog() {
       persisted: true
     });
 
-    const { renderCardBlob } = await import("./card-renderer.js");
+    const { renderCardBlob } = await import("./card-renderer.js?v=20260804f");
     const cardBlob = await renderCardBlob(report);
     const uploaded = await uploadCaseCard(created.id, cardBlob);
     report = { ...report, cardUrl: uploaded.cardUrl };
