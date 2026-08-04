@@ -1,0 +1,20 @@
+# HTML always revalidates so deploys show up immediately.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Fingerprint-less JS/CSS: short TTL so rapid deploys don't strand clients
+# on HTML/JS mismatches (e.g. removed form fields + stale validators).
+/assets/js/*
+  Cache-Control: public, max-age=60, must-revalidate
+
+/assets/css/*
+  Cache-Control: public, max-age=60, must-revalidate
+
+/assets/images/*
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/assets/icons/*
+  Cache-Control: public, max-age=86400, must-revalidate

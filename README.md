@@ -13,6 +13,8 @@ npx wrangler pages deploy . --project-name=fuckmycofounder --branch=main
 
 Required GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
+Asset caching is controlled by [`_headers`](_headers): HTML always revalidates; JS/CSS use a 60s TTL so deploys don’t leave browsers on mismatched HTML+JS.
+
 ## Local preview
 
 ```bash
