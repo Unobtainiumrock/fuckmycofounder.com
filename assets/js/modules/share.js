@@ -9,8 +9,12 @@ async function renderCard(report) {
 
 async function cardBlob(report) {
   if (report.cardUrl) {
-    const response = await fetch(report.cardUrl);
-    if (response.ok) return response.blob();
+    try {
+      const response = await fetch(report.cardUrl);
+      if (response.ok) return response.blob();
+    } catch {
+      // An unreachable stored card is not fatal: re-render it locally instead.
+    }
   }
   return renderCard(report);
 }
