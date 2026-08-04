@@ -29,11 +29,11 @@ export function attachThread(card, caseId) {
   const shell = document.createElement("section");
   shell.className = "thread";
   shell.innerHTML = `
-    <button class="thread__toggle" type="button" data-thread-toggle aria-expanded="false">
-      <span data-thread-label>Open the thread</span>
+    <button class="thread__toggle" type="button" data-thread-toggle aria-expanded="true">
+      <span data-thread-label>Thread</span>
       <span data-thread-count></span>
     </button>
-    <div class="thread__panel" data-thread-panel hidden>
+    <div class="thread__panel" data-thread-panel>
       <p class="thread__intro">Anonymous corroboration. No accounts. Same redaction rules.</p>
       <ol class="thread__list" data-thread-list></ol>
       <button class="thread__more button button--outline" type="button" data-thread-more hidden>Load earlier notes</button>
@@ -74,10 +74,15 @@ export function attachThread(card, caseId) {
 
   function setCount(next) {
     commentCount = next;
+    const open = !panel.hidden;
     countBadge.textContent = commentCount > 0 ? String(commentCount) : "";
-    label.textContent = commentCount > 0
-      ? `Thread · ${commentCount} note${commentCount === 1 ? "" : "s"}`
-      : "Open the thread";
+    if (commentCount > 0) {
+      label.textContent = open
+        ? `Thread · ${commentCount} note${commentCount === 1 ? "" : "s"}`
+        : `Show thread · ${commentCount}`;
+    } else {
+      label.textContent = open ? "Thread" : "Show thread";
+    }
     empty.hidden = list.childElementCount > 0;
   }
 
@@ -120,6 +125,7 @@ export function attachThread(card, caseId) {
     const open = panel.hidden;
     panel.hidden = !open;
     toggle.setAttribute("aria-expanded", String(open));
+    setCount(commentCount);
     if (open && !loaded) await loadPage({ reset: true });
   });
 
@@ -145,6 +151,7 @@ export function attachThread(card, caseId) {
       if (panel.hidden) {
         panel.hidden = false;
         toggle.setAttribute("aria-expanded", "true");
+        setCount(commentCount);
       }
     } catch (err) {
       error.textContent = err?.message ?? "Could not file that note.";
@@ -154,10 +161,6 @@ export function attachThread(card, caseId) {
     }
   });
 
-  // Lightweight count probe so cards show thread size before open.
-  fetchThread(caseId, { limit: 1 }).then((data) => {
-    setCount(data.thread?.commentCount ?? 0);
-  }).catch(() => {
-    setCount(0);
-  });
+  // Unlocked board visitors see threads expanded; load the conversation immediately.
+  loadPage({ reset: true });
 }
