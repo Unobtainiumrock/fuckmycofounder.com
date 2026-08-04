@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f4eddf">
-    <meta name="description" content="Turn cofounder chaos into a redacted, shareable incident report. No accounts. No uploads. No names.">
+    <meta name="description" content="Turn cofounder chaos into a redacted, shareable incident report. No accounts. Optional mugshot. No names.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Fuck My Cofounder — File an Incident Report">
     <meta property="og:description" content="Some startups need a pivot. Some need an incident report.">
@@ -14,7 +14,7 @@
     <meta name="twitter:title" content="Fuck My Cofounder">
     <meta name="twitter:description" content="File a completely unofficial cofounder incident report.">
     <meta name="twitter:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Fuck My Cofounder — File an Incident Report</title>
     <link rel="canonical" href="https://fuckmycofounder.com/">
     <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml">
@@ -40,7 +40,7 @@
       <section class="hero" aria-labelledby="hero-title">
         <h1 id="hero-title">Some startups need a pivot.<br><em>Some need an exorcism.</em></h1>
         <div class="hero__lower">
-          <p class="hero__lede">Convert founder chaos into a completely unofficial, aggressively redacted incident report. No account. No upload. No names.</p>
+          <p class="hero__lede">Convert founder chaos into a completely unofficial, aggressively redacted incident report. No account. Optional mugshot. No names.</p>
           <p class="hero__case" aria-hidden="true">CASE NO. <span data-case-ticker>000001</span><br>VIBES JURISDICTION</p>
         </div>
       </section>
@@ -55,7 +55,7 @@
           <article class="mode-card mode-card--report" aria-labelledby="report-title">
             <div class="mode-card__meta">
               <span>MODE 01</span>
-              <span>NO LOGIN / NO RECEIPTS UPLOADED</span>
+              <span>NO LOGIN / OPTIONAL MUGSHOT</span>
             </div>
             <div>
               <h3 id="report-title">File an<br>Incident Report</h3>
@@ -73,7 +73,7 @@
             </div>
             <div>
               <h3 id="spicy-title">Spicy<br>Mode</h3>
-              <p>For when “disagreement” has become a line item in the cap table.</p>
+              <p>For when the cap-table fight is really about who sits next to the ABG CMO at offsite.</p>
             </div>
             <button class="button button--disabled" type="button" disabled>
               Coming soon-ish <span aria-hidden="true">↗</span>
@@ -89,7 +89,7 @@
         <ol class="process__steps">
           <li><span>01</span><strong>Pick the charge</strong><small>Equity amnesia? Pivot addiction? Weaponized “quick sync”?</small></li>
           <li><span>02</span><strong>Remove the identifiers</strong><small>No names, handles, links, companies, or courtroom exhibits.</small></li>
-          <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a client-side-only link into the group chat.</small></li>
+          <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a link with the mugshot attached.</small></li>
         </ol>
       </section>
 
@@ -131,6 +131,20 @@
           <section class="form-step" data-step="2" aria-labelledby="step-two-title" hidden>
             <p class="form-kicker">SECTION B / THE HEAVILY REDACTED LORE</p>
             <h3 id="step-two-title">Give us the board-safe version.</h3>
+            <div class="avatar-field" data-avatar-field>
+              <div class="avatar-field__header">
+                <span>Subject photo (optional)</span>
+                <button class="text-button" type="button" data-avatar-clear hidden>Remove</button>
+              </div>
+              <div class="avatar-field__body">
+                <label class="avatar-picker">
+                  <input type="file" data-avatar-input accept="image/jpeg,image/png,image/webp">
+                  <span>Add mugshot</span>
+                </label>
+                <img class="avatar-preview" data-avatar-preview alt="" hidden>
+              </div>
+              <p class="field-error" data-avatar-error role="alert"></p>
+            </div>
             <label class="field">
               <span>My cofounder…</span>
               <textarea name="incident" rows="3" maxlength="180" required placeholder="called a 6 a.m. all-hands to unveil the exact idea we rejected yesterday"></textarea>
@@ -158,6 +172,7 @@
                   <span data-report-id>CASE #000000</span>
                 </div>
                 <div class="case-file__stamp" data-report-severity>SEVERITY: SERIES B</div>
+                <img class="case-file__avatar" data-report-avatar alt="" hidden>
                 <dl>
                   <div><dt>CHARGE</dt><dd data-report-charge></dd></div>
                   <div><dt>STATEMENT</dt><dd data-report-incident></dd></div>
@@ -193,6 +208,7 @@
                 <span data-report-id>CASE #000000</span>
               </div>
               <div class="case-file__stamp" data-report-severity>SEVERITY: SERIES B</div>
+              <img class="case-file__avatar" data-report-avatar alt="" hidden>
               <dl>
                 <div><dt>CHARGE</dt><dd data-report-charge></dd></div>
                 <div><dt>STATEMENT</dt><dd data-report-incident></dd></div>

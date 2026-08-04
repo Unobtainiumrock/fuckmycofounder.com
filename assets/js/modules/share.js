@@ -5,8 +5,22 @@ async function renderCard(report) {
   return renderCardBlob(report);
 }
 
+async function cardBlob(report) {
+  if (report.cardUrl) {
+    const response = await fetch(report.cardUrl);
+    if (response.ok) return response.blob();
+  }
+  return renderCard(report);
+}
+
 export function buildShareUrl(report) {
-  const url = new URL(window.location.href);
+  const url = new URL(window.location.origin);
+  if (report.persisted) {
+    url.pathname = `/c/${report.id}`;
+    url.hash = "";
+    return url.toString();
+  }
+  url.pathname = "/";
   url.hash = `r=${encodeReport(report)}`;
   return url.toString();
 }
@@ -16,7 +30,7 @@ export async function copyReportLink(report) {
 }
 
 export async function downloadReportCard(report) {
-  const blob = await renderCard(report);
+  const blob = await cardBlob(report);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -27,7 +41,7 @@ export async function downloadReportCard(report) {
 
 export async function shareReport(report) {
   const url = buildShareUrl(report);
-  const blob = await renderCard(report);
+  const blob = await cardBlob(report);
   const file = new File([blob], `${report.id.toLowerCase()}-incident-report.png`, { type: "image/png" });
   const shareData = {
     title: "Cofounder Incident Report",

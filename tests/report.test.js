@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeReportFragment, encodeReport } from "../assets/js/modules/codec.js";
+import { decodeCaseFragment, decodeReportFragment, encodeReport, parseCasePath } from "../assets/js/modules/codec.js";
+import { AVATAR_SIZE, ACCEPTED_TYPES } from "../assets/js/modules/avatar.js";
 import { buildReport } from "../assets/js/modules/report.js";
 import { validateStatement, clampFieldValue, FIELD_LIMITS } from "../assets/js/modules/validation.js";
+import { validateCasePayload } from "../shared/case-limits.js";
 
 const payload = {
   chargeId: "quick-sync",
@@ -23,9 +25,29 @@ test("share fragments round-trip without a server", () => {
   });
 });
 
+test("case fragments and paths decode persisted ids", () => {
+  assert.equal(decodeCaseFragment("#c=FMC-ABC2345"), "FMC-ABC2345");
+  assert.equal(decodeCaseFragment("#c=not-valid"), null);
+  assert.equal(parseCasePath("/c/FMC-ABC2345"), "FMC-ABC2345");
+  assert.equal(parseCasePath("/"), null);
+});
+
 test("generated reports are deterministic", () => {
   assert.deepEqual(buildReport(payload), buildReport(payload));
   assert.match(buildReport(payload).id, /^FMC-[A-Z0-9]{7}$/u);
+});
+
+test("persisted reports keep server ids and urls", () => {
+  const report = buildReport({
+    ...payload,
+    id: "FMC-234567A",
+    avatarUrl: "/api/avatars/FMC-234567A",
+    cardUrl: "/api/cards/FMC-234567A",
+    persisted: true
+  });
+  assert.equal(report.id, "FMC-234567A");
+  assert.equal(report.persisted, true);
+  assert.match(report.avatarUrl, /avatars/u);
 });
 
 test("redaction checks reject common identifiers", () => {
@@ -44,4 +66,16 @@ test("field values clamp to their character caps", () => {
 test("malformed and oversized fragments fail closed", () => {
   assert.equal(decodeReportFragment("#r=this-is-not-json"), null);
   assert.equal(decodeReportFragment(`#r=${"a".repeat(1801)}`), null);
+});
+
+test("avatar upload accepts common image types at fixed size", () => {
+  assert.equal(AVATAR_SIZE, 256);
+  assert.ok(ACCEPTED_TYPES.has("image/jpeg"));
+  assert.ok(ACCEPTED_TYPES.has("image/png"));
+  assert.ok(ACCEPTED_TYPES.has("image/webp"));
+});
+
+test("case payload validation rejects invalid charges", () => {
+  assert.equal(validateCasePayload(payload), "");
+  assert.match(validateCasePayload({ ...payload, chargeId: "not-real" }), /Invalid charge/u);
 });

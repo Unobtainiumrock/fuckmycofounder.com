@@ -1,3 +1,5 @@
+import { CASE_ID_PATTERN } from "../../../shared/case-limits.js";
+
 const MAX_FRAGMENT_LENGTH = 1800;
 
 function bytesToBase64(bytes) {
@@ -36,4 +38,15 @@ export function decodeReportFragment(hash) {
   } catch {
     return null;
   }
+}
+
+export function decodeCaseFragment(hash) {
+  if (!hash.startsWith("#c=")) return null;
+  const id = hash.slice(3).trim();
+  return CASE_ID_PATTERN.test(id) ? id : null;
+}
+
+export function parseCasePath(pathname) {
+  const match = pathname.match(/^\/c\/(FMC-[A-Z2-7]{7})\/?$/u);
+  return match ? match[1] : null;
 }

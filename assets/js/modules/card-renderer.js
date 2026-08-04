@@ -10,6 +10,34 @@ function label(context, text, x, y) {
   context.fillText(text, x, y);
 }
 
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Avatar load failed."));
+    image.src = url;
+  });
+}
+
+function drawAvatar(context, image) {
+  const size = 168;
+  const x = WIDTH - 72 - size;
+  const y = 158;
+  context.save();
+  context.fillStyle = COLORS.red;
+  context.fillRect(x - 8, y - 8, size + 16, size + 16);
+  context.beginPath();
+  context.rect(x, y, size, size);
+  context.clip();
+  context.drawImage(image, x, y, size, size);
+  context.restore();
+  context.strokeStyle = COLORS.paper;
+  context.lineWidth = 4;
+  context.strokeRect(x, y, size, size);
+  label(context, "SUBJECT", x, y - 14);
+}
+
 export async function renderCardBlob(report) {
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
@@ -33,6 +61,14 @@ export async function renderCardBlob(report) {
   context.moveTo(72, 145);
   context.lineTo(WIDTH - 72, 145);
   context.stroke();
+
+  if (report.avatarUrl) {
+    try {
+      drawAvatar(context, await loadImage(report.avatarUrl));
+    } catch {
+      // Card still renders without the mugshot.
+    }
+  }
 
   context.save();
   context.translate(78, 215);
@@ -77,6 +113,7 @@ export async function renderCardBlob(report) {
     context,
     report.disposition.toUpperCase(),
     max,
+    80,
     61,
     34,
     3,

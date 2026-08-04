@@ -1,0 +1,21 @@
+# Cloudflare Pages + Functions local dev and binding reference.
+# Create resources in the dashboard, then paste IDs below:
+#   KV: Workers & Pages → KV → Create → FMC_CASES
+#   R2: R2 → Create bucket → fmc-cases
+# Bind both under Pages → fuckmycofounder → Settings → Functions.
+
+name = "fuckmycofounder"
+compatibility_date = "2024-09-01"
+pages_build_output_dir = "."
+
+[[kv_namespaces]]
+binding = "FMC_CASES"
+id = "00000000000000000000000000000000"
+
+[[r2_buckets]]
+binding = "FMC_R2"
+bucket_name = "fmc-cases"
+
+[vars]
+MEDIA_BASE_URL = "https://fuckmycofounder.com/api"
+CASE_RATE_LIMIT = "5"
