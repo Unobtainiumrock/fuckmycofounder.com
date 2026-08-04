@@ -32,24 +32,28 @@ Open `http://127.0.0.1:4173`. The source tree runs unbuilt — references are un
 
 ### Cloudflare bindings (one-time)
 
-1. Create KV namespace `FMC_CASES` and R2 bucket `fmc-cases`.
+1. Create KV namespace `FMC_CASES`, R2 bucket `fmc-cases`, and D1 database `fmc-threads`.
 2. In Pages → **fuckmycofounder** → Settings → Functions, bind:
    - `FMC_CASES` → KV namespace
    - `FMC_R2` → R2 bucket `fmc-cases`
-3. Paste the KV namespace id into [`wrangler.toml`](wrangler.toml) for local Functions dev.
+   - `FMC_DB` → D1 database `fmc-threads`
+3. Paste IDs into [`wrangler.toml`](wrangler.toml) for local Functions dev.
+4. Apply thread schema: `npx wrangler d1 migrations apply fmc-threads --remote`
 
 Local static preview (`python3 -m http.server`) serves the UI only; `POST /api/cases` needs `wrangler pages dev` or a deployed Pages preview.
 
 ```bash
-npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2
+npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2 --d1 FMC_DB=fmc-threads
 ```
 
 ## Structure
 
 - `index.html` — semantic page shell and report dialog
+- `board/` — dedicated Town Board page with per-case corroboration threads
 - `assets/css/` — reset, tokens, shared components, and page layout
 - `assets/js/modules/` — copy, validation, report generation, card rendering, sharing, and UI flow
-- `functions/` — Pages Functions for case persistence (KV + R2) and the Town Board feed (`GET /api/feed?limit=&cursor=`, `POST /api/cases/:id/publish`)
+- `functions/` — Pages Functions for case persistence (KV + R2), Town Board feed, and D1 comment threads (`GET/POST /api/cases/:id/comments`)
+- `migrations/` — D1 SQL for `threads` + `comments`
 - `shared/` — validation limits shared by client and edge handlers
 - `scripts/` — the fingerprinting build that emits `dist/`
 - `assets/images/` and `assets/icons/` — social preview and favicon

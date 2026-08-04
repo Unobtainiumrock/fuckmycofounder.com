@@ -1,6 +1,7 @@
 import { fetchCase } from "./api.js";
 import { normalizeCaseId } from "./codec.js";
 import { buildReport } from "./report.js";
+import { attachThread } from "./thread.js";
 
 const PAGE_LIMIT = 12;
 const STORAGE_KEY = "fmc:shared-case";
@@ -97,6 +98,8 @@ function renderItem(item) {
     avatar.src = report.avatarUrl;
     avatar.alt = "Subject mugshot";
   }
+
+  attachThread(card, report.id);
   return card;
 }
 

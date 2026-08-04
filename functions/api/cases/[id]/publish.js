@@ -1,6 +1,7 @@
 import { getCaseRecord, isValidCaseId } from "../../../_shared/case-store.js";
 import { error, json } from "../../../_shared/env.js";
 import { FEED_TTL_SECONDS, feedKeyFor, feedSnapshot } from "../../../_shared/feed-store.js";
+import { ensureThread } from "../../../_shared/thread-store.js";
 
 export async function onRequestPost(context) {
   const { env, params } = context;
@@ -12,6 +13,7 @@ export async function onRequestPost(context) {
   if (!record) return error("Case not found.", 404);
 
   if (record.publishedAt) {
+    if (env.FMC_DB) await ensureThread(env, id, record.publishedAt);
     return json({ id, publishedAt: record.publishedAt, alreadyPublished: true });
   }
 
@@ -22,6 +24,7 @@ export async function onRequestPost(context) {
     expirationTtl: FEED_TTL_SECONDS
   });
   await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record), { expirationTtl: FEED_TTL_SECONDS });
+  if (env.FMC_DB) await ensureThread(env, id, publishedAt);
 
   return json({ id, publishedAt, alreadyPublished: false }, 201);
 }

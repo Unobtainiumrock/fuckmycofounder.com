@@ -1,7 +1,8 @@
 export const FIELD_LIMITS = {
   incident: 180,
   quote: 140,
-  translation: 80
+  translation: 80,
+  comment: 240
 };
 
 export const CHARGE_IDS = new Set([
@@ -60,4 +61,8 @@ export function validateCasePayload(payload) {
     if (error) return error;
   }
   return "";
+}
+
+export function validateCommentBody(value) {
+  return validateStatement("comment", value);
 }

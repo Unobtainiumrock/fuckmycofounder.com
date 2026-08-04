@@ -45,3 +45,19 @@ export async function publishCase(id) {
   const response = await fetch(`${API_ROOT}/cases/${id}/publish`, { method: "POST" });
   return readJson(response);
 }
+
+export async function fetchThread(caseId, { limit = 20, cursor = null } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  const response = await fetch(`${API_ROOT}/cases/${caseId}/comments?${params}`);
+  return readJson(response);
+}
+
+export async function postComment(caseId, body) {
+  const response = await fetch(`${API_ROOT}/cases/${caseId}/comments`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body })
+  });
+  return readJson(response);
+}
