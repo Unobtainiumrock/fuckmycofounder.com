@@ -10,7 +10,7 @@ pages_build_output_dir = "."
 
 [[kv_namespaces]]
 binding = "FMC_CASES"
-id = "00000000000000000000000000000000"
+id = "f78cfdb2ee8f4e1ba6840926b4a673ad"
 
 [[r2_buckets]]
 binding = "FMC_R2"

@@ -1,6 +1,6 @@
-import { getCaseRecord, isValidCaseId, publicCase } from "../_shared/case-store.js";
-import { error, json } from "../_shared/env.js";
-import { validateCardBytes } from "../_shared/image-bytes.js";
+import { getCaseRecord, isValidCaseId, publicCase } from "../../_shared/case-store.js";
+import { error, json } from "../../_shared/env.js";
+import { validateCardBytes } from "../../_shared/image-bytes.js";
 
 export async function onRequestGet(context) {
   const { env, request, params } = context;

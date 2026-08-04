@@ -2,6 +2,17 @@
 
 A dependency-free static satire site and privacy-first cofounder incident-report generator.
 
+## Production deploys
+
+Pushes to `main` auto-deploy to Cloudflare Pages via [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml) (tests → `wrangler pages deploy`). Manual ship:
+
+```bash
+export CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=c982ff5aa7f77c62715b25611839a9ff
+npx wrangler pages deploy . --project-name=fuckmycofounder --branch=main
+```
+
+Required GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
 ## Local preview
 
 ```bash
