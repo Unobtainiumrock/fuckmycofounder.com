@@ -20,22 +20,30 @@ function loadImage(url) {
   });
 }
 
+const AVATAR = { size: 200, pad: 12, caption: 38, top: 172 };
+const AVATAR_FRAME_WIDTH = AVATAR.size + AVATAR.pad * 2;
+const AVATAR_BOTTOM = AVATAR.top + AVATAR.size + AVATAR.pad + AVATAR.caption + 24;
+
 function drawAvatar(context, image) {
-  const size = 168;
-  const x = WIDTH - 72 - size;
-  const y = 158;
+  const frameHeight = AVATAR.size + AVATAR.pad + AVATAR.caption;
+  const x = WIDTH - 72 - AVATAR_FRAME_WIDTH;
+  const y = AVATAR.top;
+
   context.save();
-  context.fillStyle = COLORS.red;
-  context.fillRect(x - 8, y - 8, size + 16, size + 16);
-  context.beginPath();
-  context.rect(x, y, size, size);
-  context.clip();
-  context.drawImage(image, x, y, size, size);
+  context.translate(x + AVATAR_FRAME_WIDTH / 2, y + frameHeight / 2);
+  context.rotate(0.028);
+  context.translate(-AVATAR_FRAME_WIDTH / 2, -frameHeight / 2);
+  context.fillStyle = "rgba(0,0,0,.45)";
+  context.fillRect(10, 10, AVATAR_FRAME_WIDTH, frameHeight);
+  context.fillStyle = COLORS.paper;
+  context.fillRect(0, 0, AVATAR_FRAME_WIDTH, frameHeight);
+  context.drawImage(image, AVATAR.pad, AVATAR.pad, AVATAR.size, AVATAR.size);
+  context.fillStyle = COLORS.ink;
+  context.font = "900 22px monospace";
+  context.textAlign = "center";
+  context.fillText("SUBJECT", AVATAR_FRAME_WIDTH / 2, AVATAR.size + AVATAR.pad + 28);
   context.restore();
-  context.strokeStyle = COLORS.paper;
-  context.lineWidth = 4;
-  context.strokeRect(x, y, size, size);
-  label(context, "SUBJECT", x, y - 14);
+  context.textAlign = "left";
 }
 
 export async function renderCardBlob(report) {
@@ -62,9 +70,11 @@ export async function renderCardBlob(report) {
   context.lineTo(WIDTH - 72, 145);
   context.stroke();
 
+  let avatarDrawn = false;
   if (report.avatarUrl) {
     try {
       drawAvatar(context, await loadImage(report.avatarUrl));
+      avatarDrawn = true;
     } catch {
       // Card still renders without the mugshot.
     }
@@ -91,16 +101,19 @@ export async function renderCardBlob(report) {
   ];
 
   for (const [heading, text, baseSize, lineHeight, maxLines, minSize] of sections) {
+    // Keep text clear of the polaroid while a section sits beside it.
+    const besideAvatar = avatarDrawn && y < AVATAR_BOTTOM;
+    const sectionMax = besideAvatar ? max - AVATAR_FRAME_WIDTH - 48 : max;
     label(context, heading, left, y);
     y += 48;
     context.fillStyle = COLORS.paper;
-    const fitted = fitCanvasSection(context, text, max, baseSize, minSize, maxLines, lineHeight);
+    const fitted = fitCanvasSection(context, text, sectionMax, baseSize, minSize, maxLines, lineHeight);
     context.font = fitted.font;
     y = drawCanvasLines(context, fitted.lines, left, y, lineHeight) + 38;
     context.strokeStyle = "rgba(244,237,223,.16)";
     context.beginPath();
     context.moveTo(left, y - 15);
-    context.lineTo(WIDTH - left, y - 15);
+    context.lineTo(besideAvatar ? left + sectionMax : WIDTH - left, y - 15);
     context.stroke();
   }
 

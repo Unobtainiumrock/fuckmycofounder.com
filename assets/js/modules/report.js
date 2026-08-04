@@ -35,15 +35,16 @@ export function buildReport(payload) {
 }
 
 function renderAvatar(report, root) {
+  const subject = root.querySelector("[data-report-subject]");
   const avatar = root.querySelector("[data-report-avatar]");
-  if (!avatar) return;
+  if (!subject || !avatar) return;
 
   if (report.avatarUrl) {
-    avatar.hidden = false;
+    subject.hidden = false;
     avatar.src = report.avatarUrl;
     avatar.alt = "Subject mugshot";
   } else {
-    avatar.hidden = true;
+    subject.hidden = true;
     avatar.removeAttribute("src");
     avatar.alt = "";
   }
