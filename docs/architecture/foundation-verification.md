@@ -5,28 +5,30 @@ Status: repository implementation complete for
 
 ## Pinned toolchain
 
-| Layer | Exact version |
-| --- | --- |
-| Node.js runtime and container base | 24.18.0 LTS |
-| pnpm | 9.15.4 |
-| Next.js | 16.2.11 Active LTS |
-| React / React DOM | 19.2.8 |
-| TypeScript | 5.9.3 |
-| PostgreSQL test image | 17-alpine |
-| `pg` | 8.22.0 |
-| `node-pg-migrate` | 9.0.0 |
-| Vitest | 4.0.18 |
-| Playwright | 1.58.2 |
-| ESLint | 9.39.2 |
-| Prettier | 3.6.2 |
-| dependency-cruiser | 17.3.8 |
-| Knip | 5.83.1 |
-| OpenSpec CLI | 1.6.0 |
+| Layer                              | Exact version                          |
+| ---------------------------------- | -------------------------------------- |
+| Node.js runtime and container base | 24.18.0 LTS                            |
+| pnpm                               | 9.15.4                                 |
+| Next.js                            | 16.2.11 Active LTS                     |
+| React / React DOM                  | 19.2.8                                 |
+| TypeScript                         | 5.9.3                                  |
+| PostgreSQL test image              | 17.10-alpine (`sha256:742f40ea…52193`) |
+| `pg`                               | 8.22.0                                 |
+| `node-pg-migrate`                  | 9.0.0                                  |
+| Vitest                             | 4.0.18                                 |
+| Playwright                         | 1.58.2                                 |
+| ESLint                             | 9.39.2                                 |
+| Prettier                           | 3.6.2                                  |
+| dependency-cruiser                 | 17.3.8                                 |
+| Knip                               | 5.83.1                                 |
+| OpenSpec CLI                       | 1.6.0                                  |
 
 The lockfile is the package-level authority. `.nvmrc`, `package.json`, the CI
 workflow, and `Dockerfile` independently pin the runtime. The final container
 smoke test verified Node 24.18.0, the non-root `node` user, liveness, readiness,
-and bounded SIGTERM shutdown.
+and the framework's bounded request-draining SIGTERM path. The PostgreSQL CI
+service is pinned by manifest digest; update its documented patch version and
+digest together.
 
 ## Repository proof
 

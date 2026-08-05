@@ -9,16 +9,17 @@ tooling decision.
 
 ## Runtime and package decisions
 
-- Node.js 24.18.0 LTS, pinned by `.nvmrc`, `package.json`, CI, and the container.
+- Node.js 24.18.0 LTS, pinned by `.nvmrc`, `package.json`, CI, and the
+  container.
 - pnpm 9.15.4, pinned by the `packageManager` field and Corepack.
 - Next.js 16.2.11 Active LTS App Router with stable APIs and Node runtime only.
 - React and React DOM 19.2.8.
 - Strict TypeScript 5.9.3.
 - PostgreSQL through `pg`; ordered migrations through `node-pg-migrate`.
 - Zod only at runtime input/configuration boundaries.
-- Vitest for framework-neutral tests, real disposable PostgreSQL for persistence,
-  production HTTP tests for server output, and Playwright for the current
-  landing/Cooked Quiz journey.
+- Vitest for framework-neutral tests, real disposable PostgreSQL for
+  persistence, production HTTP tests for server output, and Playwright for the
+  current landing/Cooked Quiz journey.
 - ESLint and Prettier for source quality, dependency-cruiser for layer/cycle
   enforcement, Knip for unused exports, and a repository-owned size check.
 
@@ -42,11 +43,11 @@ docs/architecture/           accepted cross-cutting decisions
 module-owned interfaces and depend on `shared`. `modules` may depend only on
 `shared`. Modules never import `app`, React, `next/*`, or concrete platform
 implementations. A port exists only when behavior varies across at least two
-justified adapters, normally production and deterministic test versions.
-One domain module never imports another; composition belongs in `app` or an
-explicit owning application seam. Server Functions use the enforced
-`*.action.ts(x)` convention, and all `app` entrypoints are prohibited from
-importing database clients or module-internal policy files.
+justified adapters, normally production and deterministic test versions. One
+domain module never imports another; composition belongs in `app` or an explicit
+owning application seam. Server Functions use the enforced `*.action.ts(x)`
+convention, and all `app` entrypoints are prohibited from importing database
+clients or module-internal policy files.
 
 ## Runtime posture
 
@@ -59,7 +60,9 @@ importing database clients or module-internal policy files.
 - Media providers, authentication, email, storage, scanning, and hosting remain
   decisions of their owning changes.
 - The build emits one portable standalone Node container with distinct liveness
-  and readiness routes, graceful termination, and immutable build identity.
+  and readiness routes, Next.js request-draining termination, and immutable
+  build identity. The container gate proves its SIGTERM path is bounded and is
+  never force-killed.
 
 Repository proof does not include preview deployment, live migrations, crawler
 unfurls, or provider acceptance.

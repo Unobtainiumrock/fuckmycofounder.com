@@ -1,3 +1,5 @@
+import { Socket } from "node:net";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("deterministic test runtime", () => {
@@ -14,6 +16,12 @@ describe("deterministic test runtime", () => {
 
   it("denies accidental live fetches", async () => {
     await expect(fetch("https://example.com/private-provider")).rejects.toThrow(
+      "Live network access is forbidden",
+    );
+  });
+
+  it("denies accidental direct and SDK-backed socket connections", () => {
+    expect(() => new Socket().connect(443, "example.com")).toThrow(
       "Live network access is forbidden",
     );
   });

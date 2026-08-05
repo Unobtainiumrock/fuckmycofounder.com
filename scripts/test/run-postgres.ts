@@ -13,7 +13,11 @@ const result = spawnSync(
     "run",
     "tests/integration/postgres-foundation.test.ts",
   ],
-  { cwd: process.cwd(), env: process.env, stdio: "inherit" },
+  {
+    cwd: process.cwd(),
+    env: { ...process.env, ALLOW_TEST_NETWORK: "true" },
+    stdio: "inherit",
+  },
 );
 
 process.exitCode = result.status ?? 1;

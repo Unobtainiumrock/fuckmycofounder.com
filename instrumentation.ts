@@ -3,12 +3,9 @@ export async function register(): Promise<void> {
     return;
   }
 
-  const [{ readApplicationConfig }, { installGracefulShutdown }] =
-    await Promise.all([
-      import("./src/platform/runtime/application-config"),
-      import("./src/platform/runtime/graceful-shutdown"),
-    ]);
+  const { readApplicationConfig } = await import(
+    "./src/platform/runtime/application-config"
+  );
 
   readApplicationConfig();
-  installGracefulShutdown();
 }

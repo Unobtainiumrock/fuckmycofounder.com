@@ -11,7 +11,6 @@ import {
   type DatabaseRow,
   type TransactionRunner,
 } from "./transaction-runner";
-import { isShuttingDown } from "../runtime/shutdown-state";
 
 interface ManagedDatabase {
   readonly pool: Pool;
@@ -46,10 +45,6 @@ export function databaseTransactionRunner(
 function getDatabase(
   settings: DatabaseSettings = readDatabaseSettings(),
 ): ManagedDatabase {
-  if (isShuttingDown()) {
-    throw new Error("Database is shutting down");
-  }
-
   if (!settings.databaseUrl) {
     throw new Error("Database is not configured");
   }

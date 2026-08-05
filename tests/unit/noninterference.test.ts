@@ -105,15 +105,27 @@ describe("public/restricted noninterference harness", () => {
     });
   });
 
-  it("rejects forbidden accessor names without invoking the accessor", () => {
-    const getter = vi.fn(() => "acct_01K2SECRET");
-    const value = Object.defineProperty({}, "accountId", { get: getter });
+  it("inspects enumerable accessor values that JSON serialization exposes", () => {
+    const getter = vi.fn(() => "anonymous-linkage-44");
+    const value = Object.defineProperty({}, "description", {
+      enumerable: true,
+      get: getter,
+    });
 
     expect(findProjectionLeaks(value, policy)).toContainEqual({
-      kind: "forbidden-key",
-      path: "$.accountId",
-      value: "accountId",
+      kind: "forbidden-value",
+      path: "$.description",
+      value: "anonymous-linkage-44",
     });
+    expect(getter).toHaveBeenCalledOnce();
+    expect(JSON.stringify(value)).toContain("anonymous-linkage-44");
+  });
+
+  it("does not invoke non-enumerable accessors that serialization omits", () => {
+    const getter = vi.fn(() => "acct_01K2SECRET");
+    const value = Object.defineProperty({}, "description", { get: getter });
+
+    expect(findProjectionLeaks(value, policy)).toEqual([]);
     expect(getter).not.toHaveBeenCalled();
   });
 });

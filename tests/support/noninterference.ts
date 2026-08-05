@@ -9,6 +9,12 @@ interface ProjectionLeak {
   value: string;
 }
 
+interface InspectionContext {
+  policy: NoninterferencePolicy;
+  leaks: ProjectionLeak[];
+  visited: WeakSet<object>;
+}
+
 export function findProjectionLeaks(
   value: unknown,
   policy: NoninterferencePolicy,
@@ -48,14 +54,43 @@ function inspect(
   const descriptors = Object.getOwnPropertyDescriptors(value);
   for (const key of Reflect.ownKeys(descriptors)) {
     if (key === "stack") continue;
-    const descriptor = descriptors[key as keyof typeof descriptors];
-    const keyLabel = typeof key === "symbol" ? key.toString() : key;
-    const entryPath = `${path}.${keyLabel}`;
-    if (policy.forbiddenKeys.includes(keyLabel)) {
-      leaks.push({ kind: "forbidden-key", path: entryPath, value: keyLabel });
+    inspectProperty(
+      value,
+      key,
+      descriptors[key as keyof typeof descriptors],
+      path,
+      { policy, leaks, visited },
+    );
+  }
+}
+
+function inspectProperty(
+  owner: object,
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+  path: string,
+  context: InspectionContext,
+): void {
+  const { policy, leaks, visited } = context;
+  const keyLabel = typeof key === "symbol" ? key.toString() : String(key);
+  const entryPath = `${path}.${keyLabel}`;
+  if (policy.forbiddenKeys.includes(keyLabel)) {
+    leaks.push({ kind: "forbidden-key", path: entryPath, value: keyLabel });
+  }
+  if (!descriptor) return;
+
+  if ("value" in descriptor) {
+    inspect(descriptor.value as unknown, entryPath, policy, leaks, visited);
+    return;
+  }
+
+  // JSON.stringify invokes enumerable getters, so public-projection proof must
+  // inspect the same value that would cross that serialization boundary.
+  if (descriptor.enumerable && descriptor.get) {
+    try {
+      inspect(Reflect.get(owner, key), entryPath, policy, leaks, visited);
+    } catch {
+      // A throwing getter aborts serialization instead of exposing a value.
     }
-    if (!descriptor || !("value" in descriptor)) continue;
-    const entry = descriptor.value as unknown;
-    inspect(entry, entryPath, policy, leaks, visited);
   }
 }
