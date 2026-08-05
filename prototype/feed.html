@@ -1,0 +1,1060 @@
+<!doctype html>
+<!-- PROTOTYPE — throwaway. Three variants of the story feed, switchable via
+     ?variant= or the floating bar (← → keys). Question under test:
+     does the case-ledger design make the feed feel captivating?
+     A = The Docket (master–detail ledger)
+     B = The Record (document reading stream)
+     C = The Evidence Wall (pinned exhibits on ink) -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>PROTOTYPE — F/MC Feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4eddf;--ink:#151515;--red:#ff3b20;--red-dark:#d82b15;--acid:#d8ff3e;
+  --white:#fffdf8;--muted:#756e64;--line:rgba(21,21,21,.26);
+  --display:Impact,"Arial Narrow",Haettenschweiler,sans-serif;
+  --sans:Inter,ui-sans-serif,system-ui,sans-serif;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --serif:Charter,"Iowan Old Style",Georgia,serif;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --page:clamp(1rem,4vw,4rem);
+}
+*,*::before,*::after{box-sizing:border-box}
+body,h1,h2,h3,p,ul,ol,figure{margin:0}
+ul,ol{padding:0;list-style:none}
+button{font:inherit;cursor:pointer;background:none;border:0;color:inherit}
+html{background:var(--paper)}
+body{
+  min-width:320px;color:var(--ink);font-family:var(--sans);
+  background:var(--paper);
+  background-image:radial-gradient(rgba(21,21,21,.12) .55px,transparent .55px);
+  background-size:5px 5px;
+}
+:focus-visible{outline:3px solid var(--acid);outline-offset:2px}
+
+/* ---------- shared chrome ---------- */
+.masthead{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:1.1rem var(--page);border-bottom:2px solid var(--ink);
+}
+.masthead .mark{display:flex;gap:.75rem;align-items:center;font-weight:900;text-transform:uppercase}
+.mark b{padding:.38rem .45rem;color:var(--white);background:var(--ink);font-family:var(--mono);font-size:.75rem;font-weight:800}
+.mark span{font-size:.88rem;letter-spacing:-.03em}
+.masthead .docket-meta{font-family:var(--mono);font-size:.62rem;font-weight:800;text-transform:uppercase;text-align:right;color:var(--muted)}
+.docket-meta strong{color:var(--ink)}
+.pagehead{padding:2.2rem var(--page) 1.4rem;display:flex;align-items:flex-end;justify-content:space-between;gap:2rem;flex-wrap:wrap}
+.pagehead h1{font-family:var(--display);font-size:clamp(2.6rem,6vw,4.6rem);line-height:.82;text-transform:uppercase;letter-spacing:-.04em}
+.pagehead h1 em{font-style:normal;color:var(--red)}
+.pagehead .filters{display:flex;gap:.4rem;flex-wrap:wrap}
+.chip{
+  padding:.45rem .65rem;border:2px solid var(--ink);font-family:var(--mono);
+  font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em;
+  background:transparent;transition:transform 140ms var(--ease-out),box-shadow 140ms var(--ease-out);
+}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--white)}
+.chip:active{transform:scale(.97)}
+@media(hover:hover) and (pointer:fine){
+  .chip:hover{transform:translate(-2px,-2px);box-shadow:3px 3px 0 var(--ink)}
+  .chip[aria-pressed="true"]:hover{box-shadow:3px 3px 0 var(--red)}
+}
+
+/* verdict palette */
+.v-NTP{--v:#151515;--v-bg:var(--acid)}
+.v-YTP{--v:#fffdf8;--v-bg:var(--red)}
+.v-ESH{--v:#f4eddf;--v-bg:#151515}
+.v-NBD{--v:#151515;--v-bg:transparent}
+.stamp{
+  display:inline-block;padding:.34rem .5rem;border:2.5px solid var(--v,var(--ink));
+  color:var(--v,var(--ink));background:var(--v-bg,transparent);
+  font-family:var(--mono);font-size:.62rem;font-weight:900;letter-spacing:.07em;
+  transform:rotate(-2deg);
+}
+.v-NBD .stamp,.stamp.v-NBD{border-style:dashed}
+
+/* the stamp-down: once per document open */
+.stamp.stamp-in{animation:stampdown 220ms var(--ease-out) both}
+@keyframes stampdown{from{opacity:0;transform:rotate(-2deg) scale(1.4)}to{opacity:1;transform:rotate(-2deg) scale(1)}}
+
+/* receipts (mock redacted screenshot) */
+.receipt{border:2px solid var(--ink);background:var(--white);padding:.7rem .8rem;max-width:26rem}
+.receipt .rline{display:flex;gap:.5rem;align-items:center;margin:.45rem 0}
+.receipt .avatar{width:1.15rem;height:1.15rem;background:var(--ink);flex:none}
+.receipt .bubble{font-family:var(--mono);font-size:.66rem;line-height:1.5}
+.receipt .redact{background:var(--ink);color:var(--ink);padding:0 .35em;user-select:none}
+.receipt figcaption{margin-top:.5rem;font-family:var(--mono);font-size:.55rem;font-weight:800;text-transform:uppercase;color:var(--muted)}
+
+/* vote strip */
+.votes{display:flex;gap:.4rem;flex-wrap:wrap}
+.vote{
+  display:flex;gap:.5rem;align-items:baseline;padding:.5rem .6rem;border:2px solid var(--ink);
+  font-family:var(--mono);font-size:.6rem;font-weight:900;letter-spacing:.05em;
+  background:var(--white);transition:transform 140ms var(--ease-out),box-shadow 140ms var(--ease-out);
+}
+.vote:active{transform:scale(.97)}
+@media(hover:hover) and (pointer:fine){.vote:hover{transform:translate(-2px,-2px);box-shadow:3px 3px 0 var(--ink)}}
+.vote .n{font-size:.72rem}
+.vote.lead{background:var(--ink);color:var(--white)}
+.vote.lead .n{color:var(--acid)}
+
+/* ---------- VARIANT A · THE DOCKET (master–detail) ---------- */
+.vA .layout{display:grid;grid-template-columns:minmax(330px,420px) 1fr;border-top:3px solid var(--ink);min-height:calc(100dvh - 60px)}
+.vA .index{border-right:3px solid var(--ink);overflow-y:auto;max-height:calc(100dvh - 60px);position:sticky;top:0}
+.vA .index-head{display:flex;justify-content:space-between;padding:.8rem 1rem;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:.56rem;font-weight:900;letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
+.vA .row{
+  display:grid;grid-template-columns:1fr auto;gap:.2rem .8rem;width:100%;text-align:left;
+  padding:.9rem 1rem;border-bottom:1px solid var(--line);
+  transition:background 140ms var(--ease-out);
+}
+.vA .row .caseno{font-family:var(--mono);font-size:.56rem;font-weight:800;color:var(--muted)}
+.vA .row .charge{grid-column:1;font-family:var(--mono);font-size:.63rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em}
+.vA .row .teaser{grid-column:1/-1;font-family:var(--serif);font-size:.85rem;line-height:1.4;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vA .row .tag{align-self:start;justify-self:end;font-family:var(--mono);font-size:.55rem;font-weight:900;padding:.18rem .32rem;border:1.5px solid var(--v,var(--ink));color:var(--v,var(--ink));background:var(--v-bg,transparent);transform:rotate(-2deg)}
+@media(hover:hover) and (pointer:fine){.vA .row:hover{background:rgba(21,21,21,.05)}}
+.vA .row[aria-current="true"]{background:var(--ink);color:var(--paper)}
+.vA .row[aria-current="true"] .caseno{color:rgba(244,237,223,.6)}
+.vA .row[aria-current="true"] .teaser{color:var(--paper)}
+.vA .detail{padding:clamp(1.25rem,3.5vw,3rem);display:grid;align-content:start}
+.vA .file{
+  position:relative;border:3px solid var(--ink);background:var(--white);
+  box-shadow:10px 10px 0 rgba(21,21,21,.85);max-width:52rem;
+  opacity:1;transform:none;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out);
+}
+.vA .file.swap{opacity:0;transform:scale(.985)}
+.vA .file-top{display:flex;justify-content:space-between;gap:1rem;padding:.8rem 1.2rem;border-bottom:2px solid var(--ink);font-family:var(--mono);font-size:.6rem;font-weight:900;letter-spacing:.06em}
+.vA .file-body{padding:1.4rem 1.2rem 1.6rem;display:grid;gap:1.15rem}
+.vA .file h2{font-family:var(--display);font-size:clamp(1.9rem,3.6vw,3rem);line-height:.85;text-transform:uppercase;letter-spacing:-.03em;max-width:24ch}
+.vA .label{font-family:var(--mono);font-size:.56rem;font-weight:900;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:.3rem}
+.vA .testimony{font-family:var(--serif);font-size:1.06rem;line-height:1.55;max-width:58ch}
+.vA .said{font-family:var(--mono);font-size:.78rem;line-height:1.55;padding-left:.9rem;border-left:3px solid var(--red)}
+.vA .file-verdict{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:1rem 1.2rem;border-top:2px solid var(--ink);background:var(--paper)}
+.vA .file .stamp{position:absolute;top:.7rem;right:1rem;font-size:.72rem;padding:.45rem .6rem}
+
+/* ---------- VARIANT B · THE RECORD (reading stream) ---------- */
+.vB .stream{max-width:46rem;margin:0 auto;padding:1.5rem var(--page) 7rem;display:grid;gap:2.6rem}
+.vB .sheet{
+  position:relative;border:2.5px solid var(--ink);background:var(--white);
+  box-shadow:8px 8px 0 rgba(21,21,21,.8);
+  opacity:0;transform:translateY(6px);animation:sheetin 300ms var(--ease-out) forwards;
+}
+.vB .sheet:nth-child(odd){transform:translateY(6px) rotate(.35deg)}
+.vB .sheet:nth-child(even){transform:translateY(6px) rotate(-.3deg)}
+@keyframes sheetin{to{opacity:1;transform:translateY(0) rotate(0)}}
+.vB .sheet:nth-child(1){animation-delay:0ms}.vB .sheet:nth-child(2){animation-delay:40ms}
+.vB .sheet:nth-child(3){animation-delay:80ms}.vB .sheet:nth-child(4){animation-delay:120ms}
+.vB .sheet:nth-child(n+5){animation-delay:150ms}
+.vB .sheet-top{display:flex;justify-content:space-between;gap:.8rem;padding:.7rem 1.1rem;border-bottom:1.5px solid var(--ink);font-family:var(--mono);font-size:.58rem;font-weight:900;letter-spacing:.06em;flex-wrap:wrap}
+.vB .sheet-top .who{color:var(--muted)}
+.vB .sheet-body{padding:1.2rem 1.1rem 1.35rem;display:grid;gap:1rem}
+.vB .chargeline{font-family:var(--mono);font-size:.66rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--red-dark)}
+.vB .testimony{font-family:var(--serif);font-size:1.05rem;line-height:1.6}
+.vB .said{font-family:var(--mono);font-size:.76rem;line-height:1.55;padding-left:.85rem;border-left:3px solid var(--red);color:var(--ink)}
+.vB .sheet-foot{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.85rem 1.1rem;border-top:1.5px solid var(--ink);background:var(--paper);flex-wrap:wrap}
+.vB .sheet .stamp{position:absolute;top:-.85rem;right:.9rem;box-shadow:3px 3px 0 rgba(21,21,21,.35)}
+.vB .comments{font-family:var(--mono);font-size:.58rem;font-weight:800;letter-spacing:.05em;color:var(--muted);text-transform:uppercase}
+
+/* ---------- VARIANT C · THE EVIDENCE WALL ---------- */
+.vC{background:var(--ink);min-height:100dvh}
+.vC .masthead,.vC .pagehead{color:var(--paper);border-color:rgba(244,237,223,.35)}
+.vC .masthead .mark b{background:var(--red);color:var(--ink)}
+.vC .docket-meta{color:rgba(244,237,223,.55)}.vC .docket-meta strong{color:var(--acid)}
+.vC .chip{border-color:rgba(244,237,223,.6);color:var(--paper)}
+.vC .chip[aria-pressed="true"]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+@media(hover:hover) and (pointer:fine){.vC .chip:hover{box-shadow:3px 3px 0 var(--red)}}
+.vC .wall{columns:3;column-gap:1.1rem;padding:1rem var(--page) 7rem}
+.vC .pin{
+  break-inside:avoid;margin-bottom:1.1rem;position:relative;
+  border:2px solid var(--ink);background:var(--white);
+  box-shadow:0 14px 22px rgba(0,0,0,.5);
+  transition:transform 180ms var(--ease-out);
+}
+.vC .pin:nth-child(3n){transform:rotate(.8deg)}
+.vC .pin:nth-child(3n+1){transform:rotate(-.7deg)}
+.vC .pin:nth-child(5n){transform:rotate(1.3deg)}
+@media(hover:hover) and (pointer:fine){.vC .pin:hover{transform:rotate(0) translateY(-3px);z-index:2}}
+.vC .pin::before{ /* the pin itself */
+  content:"";position:absolute;top:-7px;left:50%;width:13px;height:13px;margin-left:-6px;
+  background:var(--red);border:2px solid var(--ink);border-radius:50%;z-index:3;
+}
+.vC .pin-top{display:flex;justify-content:space-between;padding:.6rem .8rem .35rem;font-family:var(--mono);font-size:.54rem;font-weight:900;letter-spacing:.05em;color:var(--muted)}
+.vC .pin-body{padding:.2rem .8rem .9rem;display:grid;gap:.6rem}
+.vC .pin .chargeline{font-family:var(--mono);font-size:.6rem;font-weight:900;text-transform:uppercase;color:var(--red-dark)}
+.vC .pin .testimony{font-family:var(--serif);font-size:.92rem;line-height:1.5}
+.vC .pin .stamp{position:absolute;bottom:.7rem;right:.6rem;opacity:.92;font-size:.56rem}
+.vC .pin-foot{display:flex;gap:.7rem;padding:.55rem .8rem;border-top:1px solid var(--line);font-family:var(--mono);font-size:.55rem;font-weight:800;color:var(--muted)}
+.vC .pin-foot b{color:var(--ink)}
+@media(max-width:1000px){.vC .wall{columns:2}}
+@media(max-width:640px){.vC .wall{columns:1}}
+
+/* ---------- VARIANT D · THE LEDGER (trustmrr-derived system) ---------- */
+.vD{
+  --d-bg:#f5f5f5;--d-card:#ffffff;--d-ink:#0a0a0a;--d-mut:#737373;--d-border:#e5e5e5;
+  --d-green:#16a34a;--d-red:#dc2626;--d-amber-bg:#fef3c7;--d-amber:#b45309;
+  background:var(--d-bg);min-height:100dvh;color:var(--d-ink);
+  font-family:Inconsolata,"SFMono-Regular",Consolas,monospace;
+}
+.vD *{border-radius:0}
+.vD .wrap{max-width:64rem;margin:0 auto;padding:3rem 1rem 6rem}
+.vD .hero{text-align:center;display:grid;gap:.9rem;justify-items:center;margin-bottom:3rem}
+.vD .hero .lockup{display:flex;gap:.5rem;align-items:center;font-weight:700;font-size:16px;color:var(--d-mut)}
+.vD .hero .lockup b{background:var(--d-ink);color:#fff;padding:.2rem .4rem;font-size:12px;border-radius:6px}
+.vD .hero h1{font-size:clamp(30px,5vw,48px);font-weight:800;letter-spacing:-.025em;line-height:1.1}
+.vD .hero p{max-width:42rem;color:var(--d-mut);font-size:14px;line-height:1.6}
+.vD .hero .cta{display:flex;gap:.6rem;width:min(100%,30rem)}
+.vD .hero input{
+  flex:1;height:40px;padding:0 .9rem;border:1px solid var(--d-border);border-radius:8px;
+  background:var(--d-card);font:inherit;font-size:14px;box-shadow:0 1px 2px rgba(0,0,0,.05);
+}
+.vD .hero input::placeholder{color:var(--d-mut)}
+.vD .btn{
+  height:40px;padding:0 1.5rem;border-radius:8px;background:#171717;color:#fff;
+  font-size:14px;font-weight:500;transition:background .15s cubic-bezier(.4,0,.2,1);
+}
+.vD .btn:hover{background:rgba(23,23,23,.9)}
+.vD .micronav{font-size:14px;color:var(--d-mut)}
+.vD .micronav a{color:inherit;text-decoration:none;margin:0 .35rem}
+.vD .micronav a:hover{text-decoration:underline;color:var(--d-ink)}
+.vD .kicker{font-size:14px;font-weight:600;color:var(--d-mut);margin:2rem 0 .75rem}
+.vD .rail{display:flex;gap:12px;overflow-x:auto;padding-bottom:.5rem;scroll-snap-type:x mandatory;scrollbar-width:none}
+.vD .rail::-webkit-scrollbar{display:none}
+.vD .mini{
+  position:relative;flex:0 0 220px;scroll-snap-align:start;background:rgba(255,255,255,.6);
+  border:1px solid var(--d-border);border-radius:10px;padding:12px;display:grid;gap:10px;align-content:start;
+  transition:border-color .15s cubic-bezier(.4,0,.2,1),background .15s cubic-bezier(.4,0,.2,1);
+}
+.vD .mini:hover{border-color:rgba(23,23,23,.3);background:#fff}
+.vD .mini .ribbon{
+  position:absolute;top:0;right:0;background:var(--d-amber-bg);color:var(--d-amber);
+  font-size:9px;font-weight:700;padding:2px 6px;border-radius:0 10px 0 10px;letter-spacing:.04em;
+}
+.vD .mini .t{font-size:10px;color:var(--d-mut)}
+.vD .mini .n{font-size:14px;font-weight:700;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.vD .mini .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;border-top:1px solid var(--d-border);padding-top:8px}
+.vD .stat .l{font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;color:var(--d-mut)}
+.vD .stat .v{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.vD .ghost{
+  flex:0 0 220px;display:grid;place-items:center;border:2px dashed var(--d-border);border-radius:10px;
+  color:var(--d-mut);font-size:14px;transition:border-color .15s,color .15s;
+}
+.vD .ghost:hover{border-color:rgba(23,23,23,.3);color:var(--d-ink)}
+.vD .board{background:var(--d-card);border:1px solid var(--d-border);border-radius:14px;padding:1.25rem;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.vD .board-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:.9rem;flex-wrap:wrap}
+.vD .board-head h2{font-size:18px;font-weight:700}
+.vD .selects{display:flex;gap:.5rem}
+.vD .select{border:1px solid var(--d-border);border-radius:8px;padding:.45rem .75rem;font-size:14px;color:var(--d-ink);background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.vD table{width:100%;border-collapse:collapse;font-size:14px}
+.vD th{
+  text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;
+  color:var(--d-mut);padding:8px;border-bottom:1px solid var(--d-border);height:40px;
+}
+.vD th.r,.vD td.r{text-align:right}
+.vD td{padding:8px;border-bottom:1px solid var(--d-border);vertical-align:middle}
+.vD tr.case{cursor:pointer;transition:background .15s cubic-bezier(.4,0,.2,1)}
+.vD tr.case:hover{background:rgba(245,245,245,.7)}
+.vD tr.case:last-child td{border-bottom:0}
+.vD .rank{width:50px;font-weight:600;color:var(--d-mut)}
+.vD .story .charge-s{font-weight:500}
+.vD .story .desc{font-size:12px;color:var(--d-mut);display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;max-width:46ch}
+.vD .who{display:flex;gap:.5rem;align-items:center;color:var(--d-ink)}
+.vD .who .av{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#171717,#525252);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.vD .num{font-weight:600;font-variant-numeric:tabular-nums}
+.vD .lead-NTP{color:var(--d-green);font-weight:700}
+.vD .lead-YTP{color:var(--d-red);font-weight:700}
+.vD .lead-ESH{color:var(--d-amber);font-weight:700}
+.vD .lead-NBD{color:var(--d-mut);font-weight:700}
+.vD .trust{display:flex;gap:.5rem;justify-content:center;margin-top:.9rem;font-size:12px;color:var(--d-mut)}
+.vD .footer{border-top:1px solid var(--d-border);margin-top:3rem;padding-top:2rem;display:flex;justify-content:space-between;gap:2rem;font-size:14px;color:var(--d-mut);flex-wrap:wrap}
+@media(max-width:700px){.vD .col-hide{display:none}}
+
+/* ---------- VARIANT E · THE CASEBOOK (our layout, terminal system + red) ---------- */
+.vE{
+  --e-bg:#f5f5f4;--e-card:#ffffff;--e-ink:#0a0a0a;--e-mut:#737373;--e-border:#e5e5e5;
+  --e-red:#ff3b20;--e-red-t:#d82b15;--e-green:#16a34a;--e-amber:#b45309;--e-amber-bg:#fef3c7;
+  --e-ease:cubic-bezier(.23,1,.32,1);
+  background:var(--e-bg);min-height:100dvh;color:var(--e-ink);
+  font-family:Inconsolata,"SFMono-Regular",Consolas,monospace;
+  border-top:3px solid var(--e-red);
+}
+.vE .topbar{
+  position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.7rem clamp(1rem,4vw,2.5rem);border-bottom:1px solid var(--e-border);
+  background:rgba(245,245,244,.85);backdrop-filter:blur(12px) saturate(160%);
+}
+.vE .lockup{display:flex;gap:.5rem;align-items:center;font-weight:800;font-size:14px;letter-spacing:-.01em}
+.vE .lockup b{background:var(--e-red);color:#fff;padding:.18rem .4rem;border-radius:6px;font-size:11px;font-weight:800}
+.vE .topnav{display:flex;gap:1.1rem;align-items:center;font-size:13px;color:var(--e-mut)}
+.vE .topnav a{color:inherit;text-decoration:none}
+.vE .topnav a:hover{color:var(--e-ink);text-decoration:underline}
+.vE .file-btn{
+  background:var(--e-red);color:#fff;font-size:13px;font-weight:700;height:34px;padding:0 1rem;
+  border-radius:7px;transition:transform 120ms var(--e-ease),background 150ms;
+}
+.vE .file-btn:hover{background:var(--e-red-t)}
+.vE .file-btn:active{transform:scale(.97)}
+.vE .shell{max-width:66rem;margin:0 auto;padding:2rem 1rem 6rem;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:2rem;align-items:start}
+.vE .feedhead{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin-bottom:1.1rem}
+.vE .feedhead h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.vE .feedhead h1 em{font-style:normal;color:var(--e-red-t)}
+.vE .tabs{display:flex;gap:.25rem;font-size:12px}
+.vE .tab{padding:.35rem .6rem;border-radius:6px;color:var(--e-mut);font-weight:600;transition:background 150ms,color 150ms}
+.vE .tab[aria-pressed="true"]{background:var(--e-ink);color:#fff}
+.vE .tab:not([aria-pressed="true"]):hover{background:rgba(10,10,10,.06);color:var(--e-ink)}
+.vE .case{
+  background:var(--e-card);border:1px solid var(--e-border);border-radius:12px;
+  padding:1.1rem 1.2rem 1rem;margin-bottom:.9rem;
+  transition:border-color 150ms var(--e-ease);
+}
+@media(hover:hover) and (pointer:fine){.vE .case:hover{border-color:rgba(10,10,10,.25)}}
+.vE .case-meta{display:flex;justify-content:space-between;gap:.8rem;font-size:11px;color:var(--e-mut);margin-bottom:.55rem}
+.vE .case-meta .chg{color:var(--e-red-t);font-weight:800;letter-spacing:.04em}
+.vE .case-meta .ask{background:var(--e-amber-bg);color:var(--e-amber);font-weight:800;font-size:9px;padding:2px 6px;border-radius:99px;letter-spacing:.05em;align-self:center}
+.vE .case-text{font-size:15.5px;line-height:1.62;font-weight:500;letter-spacing:.001em}
+.vE .case-quote{margin:.7rem 0 0;padding-left:.8rem;border-left:3px solid var(--e-red);font-size:13px;color:var(--e-mut);line-height:1.55}
+.vE .split{display:flex;height:7px;border-radius:99px;overflow:hidden;margin:.95rem 0 .55rem;background:var(--e-border)}
+.vE .split i{display:block;height:100%;transition:width 300ms var(--e-ease)}
+.vE .s-NTP{background:var(--e-green)}.vE .s-YTP{background:var(--e-red)}
+.vE .s-ESH{background:#f59e0b}.vE .s-NBD{background:#a3a3a3}
+.vE .case-foot{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap}
+.vE .vbtns{display:flex;gap:.35rem;flex-wrap:wrap}
+.vE .vb{
+  display:flex;gap:.45rem;align-items:baseline;border:1px solid var(--e-border);border-radius:7px;
+  padding:.4rem .55rem;font-size:11px;font-weight:800;letter-spacing:.03em;background:#fff;
+  transition:transform 120ms var(--e-ease),border-color 150ms,background 150ms;
+}
+.vE .vb:active{transform:scale(.96)}
+.vE .vb .n{font-weight:700;font-variant-numeric:tabular-nums;color:var(--e-mut)}
+.vE .vb.on{border-width:1.5px}
+.vE .vb.on.b-NTP{border-color:var(--e-green);color:var(--e-green)}
+.vE .vb.on.b-YTP{border-color:var(--e-red);color:var(--e-red-t)}
+.vE .vb.on.b-ESH{border-color:#f59e0b;color:var(--e-amber)}
+.vE .vb.on.b-NBD{border-color:#737373;color:#525252}
+@media(hover:hover) and (pointer:fine){.vE .vb:hover{border-color:rgba(10,10,10,.35)}}
+.vE .case-links{font-size:11px;color:var(--e-mut)}
+.vE .case-links b{color:var(--e-ink)}
+.vE .rail{position:sticky;top:66px;display:grid;gap:.9rem}
+.vE .mod{background:var(--e-card);border:1px solid var(--e-border);border-radius:12px;padding:1rem 1.1rem}
+.vE .mod h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--e-mut);font-weight:700;margin-bottom:.7rem}
+.vE .top5{display:grid;gap:.55rem}
+.vE .top5 a{display:grid;grid-template-columns:1.1rem 1fr auto;gap:.5rem;align-items:baseline;font-size:12px;text-decoration:none;color:var(--e-ink)}
+.vE .top5 .rk{color:var(--e-mut);font-weight:700}
+.vE .top5 .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.vE .top5 a:hover .nm{text-decoration:underline}
+.vE .top5 .ct{font-weight:700;font-variant-numeric:tabular-nums}
+.vE .dist{display:grid;gap:.45rem}
+.vE .dist .row{display:grid;grid-template-columns:1fr auto;gap:.5rem;font-size:11px;align-items:center}
+.vE .dist .bar{grid-column:1/-1;height:4px;border-radius:99px;background:var(--e-border);overflow:hidden}
+.vE .dist .bar i{display:block;height:100%;background:var(--e-red);border-radius:99px}
+.vE .dist .pc{font-weight:700;color:var(--e-mut)}
+.vE .trustline{font-size:11px;color:var(--e-mut);line-height:1.6}
+.vE .trustline a{color:var(--e-ink)}
+@media(max-width:900px){.vE .shell{grid-template-columns:1fr}.vE .rail{position:static;order:2}.vE .topnav .hide-s{display:none}}
+
+/* ---------- VARIANT F · THE TIMELINE (X-native dark) ---------- */
+.vF{
+  --f-bg:#0a0a0a;--f-ink:#e7e7e4;--f-mut:#71716d;--f-border:#2b2b28;
+  --f-red:#ff5a43;--f-red-deep:#ff3b20;--f-green:#31c46f;--f-amber:#e0a63c;
+  --f-hover:rgba(231,231,228,.04);--f-ease:cubic-bezier(.23,1,.32,1);
+  background:var(--f-bg);color:var(--f-ink);min-height:100dvh;
+  font-family:var(--sans);
+}
+.vF .frame{max-width:76rem;margin:0 auto;display:grid;grid-template-columns:240px minmax(0,600px) 1fr;gap:0;align-items:start}
+.vF .nav{position:sticky;top:0;height:100dvh;padding:1rem .8rem;display:flex;flex-direction:column;gap:.2rem}
+.vF .nav .lockup{display:flex;align-items:center;gap:.55rem;padding:.5rem .7rem;margin-bottom:.6rem;font-family:var(--mono);font-weight:800;font-size:.8rem;letter-spacing:.02em}
+.vF .nav .lockup b{background:var(--f-red-deep);color:#0a0a0a;padding:.2rem .4rem;border-radius:6px;font-size:.7rem}
+.vF .nav a{
+  display:flex;gap:.8rem;align-items:center;padding:.65rem .8rem;border-radius:999px;
+  color:var(--f-ink);text-decoration:none;font-size:1.05rem;font-weight:500;
+  transition:background 140ms var(--f-ease);
+}
+.vF .nav a:hover{background:var(--f-hover)}
+.vF .nav a.on{font-weight:800}
+.vF .nav .ico{font-family:var(--mono);font-size:.8rem;font-weight:800;color:var(--f-mut);width:1.4rem;text-align:center}
+.vF .nav .post-btn{
+  margin-top:.9rem;background:var(--f-red-deep);color:#0f0f0f;border-radius:999px;height:48px;
+  font-size:1rem;font-weight:800;transition:transform 120ms var(--f-ease),filter 150ms;
+}
+.vF .nav .post-btn:hover{filter:brightness(1.08)}
+.vF .nav .post-btn:active{transform:scale(.97)}
+.vF .tl{border-inline:1px solid var(--f-border);min-height:100dvh}
+.vF .tl-head{
+  position:sticky;top:0;z-index:5;display:flex;border-bottom:1px solid var(--f-border);
+  background:rgba(10,10,10,.75);backdrop-filter:blur(12px);
+}
+.vF .tl-head button{
+  flex:1;padding:1rem 0 .8rem;font-size:.9rem;font-weight:600;color:var(--f-mut);
+  position:relative;transition:background 140ms;
+}
+.vF .tl-head button:hover{background:var(--f-hover)}
+.vF .tl-head button.on{color:var(--f-ink);font-weight:800}
+.vF .tl-head button.on::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:3.4rem;height:3px;border-radius:99px;background:var(--f-red-deep)}
+.vF .post{
+  display:grid;grid-template-columns:44px 1fr;gap:.75rem;padding:.9rem 1rem .6rem;
+  border-bottom:1px solid var(--f-border);cursor:pointer;transition:background 140ms var(--f-ease);
+}
+.vF .post:hover{background:var(--f-hover)}
+.vF .av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#3c3c38,#1c1c1a);display:grid;place-items:center;font-family:var(--mono);font-weight:800;font-size:1rem;color:var(--f-ink)}
+.vF .post-head{display:flex;gap:.45rem;align-items:baseline;flex-wrap:wrap;font-size:.92rem}
+.vF .post-head .who{font-weight:800}
+.vF .post-head .meta{color:var(--f-mut);font-family:var(--mono);font-size:.72rem}
+.vF .chargechip{
+  font-family:var(--mono);font-size:.62rem;font-weight:800;letter-spacing:.05em;
+  color:var(--f-red);border:1px solid rgba(255,90,67,.4);border-radius:4px;padding:.12rem .4rem;
+}
+.vF .askchip{font-family:var(--mono);font-size:.62rem;font-weight:800;color:var(--f-amber);border:1px solid rgba(224,166,60,.45);border-radius:4px;padding:.12rem .4rem}
+.vF .post-text{font-size:.98rem;line-height:1.5;margin:.35rem 0 .6rem;color:var(--f-ink)}
+.vF .qbox{
+  border:1px solid var(--f-border);border-radius:12px;padding:.7rem .85rem;margin-bottom:.7rem;
+  font-size:.85rem;color:var(--f-mut);line-height:1.5;
+}
+.vF .qbox .qwho{font-family:var(--mono);font-size:.66rem;font-weight:800;color:var(--f-mut);display:block;margin-bottom:.25rem}
+.vF .qbox .qt{color:var(--f-ink)}
+.vF .poll{display:grid;gap:.4rem;margin-bottom:.65rem}
+.vF .popt{
+  position:relative;display:flex;justify-content:space-between;gap:.6rem;align-items:center;
+  border:1px solid var(--f-border);border-radius:8px;min-height:2.1rem;padding:0 .7rem;
+  font-size:.82rem;font-weight:700;overflow:hidden;text-align:left;
+  transition:border-color 140ms var(--f-ease),transform 120ms var(--f-ease);
+}
+.vF .popt:active{transform:scale(.99)}
+.vF .popt:hover{border-color:var(--f-mut)}
+.vF .popt .fill{
+  position:absolute;inset:0;width:0;border-radius:0;z-index:0;opacity:.22;
+  transition:width 420ms var(--f-ease);
+}
+.vF .popt.f-NTP .fill{background:var(--f-green)}.vF .popt.f-YTP .fill{background:var(--f-red)}
+.vF .popt.f-ESH .fill{background:var(--f-amber)}.vF .popt.f-NBD .fill{background:#8b8b85}
+.vF .popt span{position:relative;z-index:1}
+.vF .popt .pc{font-family:var(--mono);font-weight:800;color:var(--f-mut)}
+.vF .popt.mine{border-color:var(--f-ink)}
+.vF .popt.mine .lab::after{content:" ✓"}
+.vF .poll-meta{font-family:var(--mono);font-size:.68rem;color:var(--f-mut);margin-bottom:.5rem}
+.vF .actions{display:flex;gap:2.2rem;padding:.15rem 0 .3rem;color:var(--f-mut);font-family:var(--mono);font-size:.72rem}
+.vF .act{display:flex;gap:.45rem;align-items:center;transition:color 140ms}
+.vF .act:hover{color:var(--f-ink)}
+.vF .act .g{width:1.9rem;height:1.9rem;display:grid;place-items:center;border-radius:50%;transition:background 140ms}
+.vF .act:hover .g{background:var(--f-hover)}
+.vF .rail-f{position:sticky;top:0;height:100dvh;overflow:auto;padding:1rem 1.2rem;display:grid;gap:1rem;align-content:start}
+.vF .search{
+  display:flex;align-items:center;gap:.6rem;background:#161614;border:1px solid transparent;border-radius:999px;
+  padding:.7rem 1.1rem;color:var(--f-mut);font-size:.88rem;
+}
+.vF .search:focus-within{border-color:var(--f-red-deep)}
+.vF .search input{flex:1;background:none;border:0;color:var(--f-ink);font:inherit;outline:none}
+.vF .panel{background:#131311;border-radius:16px;padding:.4rem 0;overflow:hidden}
+.vF .panel h2{font-size:1.05rem;font-weight:800;padding:.7rem 1.1rem .4rem}
+.vF .trend{display:block;width:100%;text-align:left;padding:.55rem 1.1rem;transition:background 140ms;text-decoration:none;color:inherit}
+.vF .trend:hover{background:var(--f-hover)}
+.vF .trend .k{font-family:var(--mono);font-size:.62rem;color:var(--f-mut);text-transform:lowercase}
+.vF .trend .t{font-size:.9rem;font-weight:800;margin:.1rem 0}
+.vF .trend .c{font-family:var(--mono);font-size:.66rem;color:var(--f-mut)}
+.vF .finefine{font-size:.7rem;color:var(--f-mut);line-height:1.6;padding:0 .3rem}
+.vF .finefine a{color:var(--f-mut)}
+@media(max-width:1100px){.vF .frame{grid-template-columns:72px minmax(0,1fr)}.vF .rail-f{display:none}.vF .nav a span.txt,.vF .nav .lockup span{display:none}.vF .nav .post-btn{font-size:0;width:48px}.vF .nav .post-btn::before{content:"+";font-size:1.4rem}}
+@media(max-width:640px){.vF .frame{grid-template-columns:minmax(0,1fr)}.vF .nav{display:none}}
+
+/* ---------- VARIANT G · THE CASE TIMELINE (F + structured posts + exhibits) ---------- */
+.vG .composer{
+  display:grid;grid-template-columns:44px 1fr;gap:.75rem;padding:1rem;border-bottom:1px solid var(--f-border);
+}
+.vG .composer .prompt{font-size:1.05rem;color:var(--f-mut);font-weight:500;padding:.35rem 0 .7rem}
+.vG .composer .prompt b{color:var(--f-ink)}
+.vG .chargepick{display:flex;gap:.35rem;overflow-x:auto;padding-bottom:.6rem;scrollbar-width:none}
+.vG .chargepick::-webkit-scrollbar{display:none}
+.vG .cp{
+  flex:none;font-family:var(--mono);font-size:.62rem;font-weight:800;letter-spacing:.04em;
+  color:var(--f-mut);border:1px solid var(--f-border);border-radius:99px;padding:.35rem .65rem;
+  transition:color 140ms,border-color 140ms,transform 120ms var(--f-ease);
+}
+.vG .cp:active{transform:scale(.96)}
+.vG .cp.on,.vG .cp:hover{color:var(--f-red);border-color:rgba(255,90,67,.5)}
+.vG .cfield{
+  display:block;width:100%;background:none;border:0;border-bottom:1px solid var(--f-border);
+  color:var(--f-ink);font:inherit;font-size:.95rem;padding:.55rem 0;outline:none;
+}
+.vG .cfield::placeholder{color:var(--f-mut)}
+.vG .cfield:focus{border-bottom-color:var(--f-red-deep)}
+.vG .composer-foot{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding-top:.7rem}
+.vG .dropzone{
+  flex:1;display:flex;gap:.5rem;align-items:center;border:1.5px dashed var(--f-border);border-radius:8px;
+  padding:.45rem .7rem;font-family:var(--mono);font-size:.66rem;color:var(--f-mut);
+  transition:border-color 140ms,color 140ms;
+}
+.vG .dropzone:hover{border-color:var(--f-mut);color:var(--f-ink)}
+.vG .go{background:var(--f-red-deep);color:#0f0f0f;border-radius:99px;height:38px;padding:0 1.2rem;font-weight:800;font-size:.88rem;transition:transform 120ms var(--f-ease),filter 150ms}
+.vG .go:hover{filter:brightness(1.08)}.vG .go:active{transform:scale(.97)}
+.vG .exhibits{display:flex;gap:.5rem;overflow-x:auto;margin-bottom:.7rem;scrollbar-width:none}
+.vG .exhibits::-webkit-scrollbar{display:none}
+.vG .exh{
+  flex:none;width:150px;border:1px solid var(--f-border);border-radius:8px;overflow:hidden;
+  transition:transform 160ms var(--f-ease),border-color 140ms;cursor:zoom-in;background:#f4f2ec;
+}
+@media(hover:hover) and (pointer:fine){.vG .exh:hover{transform:translateY(-2px);border-color:var(--f-mut)}}
+.vG .exh .shot{height:96px;padding:.55rem .6rem;display:grid;gap:.32rem;align-content:start}
+.vG .exh .l{height:7px;border-radius:2px;background:#c9c5ba}
+.vG .exh .l.dark{background:#151515}
+.vG .exh .l.w40{width:40%}.vG .exh .l.w70{width:70%}.vG .exh .l.w55{width:55%}.vG .exh .l.w85{width:85%}
+.vG .exh .grid{height:96px;background:
+  linear-gradient(#d8d4c8 1px,transparent 1px) 0 0/100% 16px,
+  linear-gradient(90deg,#d8d4c8 1px,transparent 1px) 0 0/37px 100%,#f4f2ec}
+.vG .exh .tagbar{
+  display:flex;justify-content:space-between;padding:.3rem .5rem;background:#151515;
+  font-family:var(--mono);font-size:.55rem;font-weight:800;letter-spacing:.06em;color:#f4eddf;
+}
+.vG .post{position:relative}
+.vG .stamp-g{
+  position:absolute;bottom:.8rem;right:.9rem;transform:rotate(-4deg);
+  font-family:var(--mono);font-size:.6rem;font-weight:900;letter-spacing:.08em;
+  border:2px solid;border-radius:3px;padding:.28rem .5rem;opacity:.95;pointer-events:none;
+}
+.vG .stamp-g.sg-NTP{color:var(--f-green);border-color:var(--f-green)}
+.vG .stamp-g.sg-YTP{color:var(--f-red);border-color:var(--f-red)}
+.vG .stamp-g.sg-ESH{color:var(--f-amber);border-color:var(--f-amber)}
+.vG .stamp-g.sg-NBD{color:#8b8b85;border-color:#8b8b85;border-style:dashed}
+
+/* ---------- mobile: variant A collapses to overlay detail ---------- */
+@media(max-width:860px){
+  .vA .layout{grid-template-columns:1fr}
+  .vA .index{border-right:0;max-height:none;position:static}
+  .vA .detail{
+    position:fixed;inset:0;z-index:40;background:rgba(12,12,12,.55);
+    padding:1rem;overflow:auto;opacity:0;pointer-events:none;
+    transition:opacity 180ms var(--ease-out);
+  }
+  .vA .detail.open{opacity:1;pointer-events:auto}
+  .vA .file{margin:2.5rem auto}
+  .vA .close-detail{display:inline-flex}
+}
+.vA .close-detail{display:none;position:absolute;top:.6rem;left:.8rem;width:2.2rem;height:2.2rem;border:2px solid var(--ink);background:var(--white);font-size:1.2rem;align-items:center;justify-content:center}
+
+/* ---------- prototype switcher (not part of the design) ---------- */
+.proto-bar{
+  position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);z-index:99;
+  display:flex;align-items:center;gap:.25rem;padding:.3rem;
+  background:#000;color:#fff;border-radius:999px;box-shadow:0 8px 30px rgba(0,0,0,.45);
+  font-family:var(--mono);font-size:.68rem;font-weight:700;
+}
+.proto-bar button{width:2.1rem;height:2.1rem;border-radius:999px;color:#fff;display:grid;place-items:center;font-size:.9rem}
+.proto-bar button:hover{background:#2a2a2a}
+.proto-bar .lab{padding:0 .7rem;white-space:nowrap;opacity:.9}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .vB .sheet{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav class="proto-bar" aria-label="Prototype variant switcher">
+  <button type="button" data-prev aria-label="Previous variant">←</button>
+  <span class="lab" data-label></span>
+  <button type="button" data-next aria-label="Next variant">→</button>
+</nav>
+
+<script>
+/* PROTOTYPE data — 14 seeded stories. Doubles as candidate launch content. */
+const V = {NTP:"NOT THE PROBLEM",YTP:"YOU'RE THE PROBLEM",ESH:"EVERYONE SUCKS HERE",NBD:"NO VILLAINS, JUST A STARTUP DYING NORMALLY"};
+const STORIES = [
+ {id:"FMC-0007312",handle:"founder-4417",time:"2H AGO",charge:"SELECTIVE EQUITY AMNESIA",
+  text:"Eight months in, my cofounder announced the 50/50 split we shook on was “more of a vibe than a number.” He had already emailed our lawyer a new cap table. I was CC'd. My new number had a 2 in front and nothing after it.",
+  quote:"equity should reflect energy, and lately your energy has been very Q3",
+  votes:{NTP:412,YTP:18,ESH:44,NBD:9},verdict:"NTP",comments:87,receipt:true},
+ {id:"FMC-0007311",handle:"founder-2280",time:"5H AGO",charge:"CHRONIC PIVOT ADDICTION",
+  text:"We have pivoted six times in four months. Two of the pivots happened during a single investor call. The deck now has a slide that just says “TBD but with conviction.” I made that slide. I hate that I made that slide.",
+  quote:"the market keeps telling us things and I keep listening",
+  votes:{NTP:203,YTP:31,ESH:158,NBD:12},verdict:"NTP",comments:64},
+ {id:"FMC-0007309",handle:"founder-9903",time:"9H AGO",charge:"GHOSTING THE ROADMAP",
+  text:"My technical cofounder has not pushed a commit in 41 days. He is, however, extremely active on our Linear board, where he has renamed the same epic four times. Current title: ‘Foundational Excellence (Phase 0).’",
+  quote:"shipping is a mindset, and I'm still architecting the mindset",
+  votes:{NTP:388,YTP:12,ESH:29,NBD:21},verdict:"NTP",comments:142,receipt:true},
+ {id:"FMC-0007305",handle:"founder-1147",time:"14H AGO",charge:"WEAPONIZED ‘QUICK SYNC’",
+  text:"I asked for one no-meeting day per week. She responded by scheduling a quick sync to discuss it. The sync had a pre-read. The pre-read had a survey. The survey asked me to rank my “collaboration love languages.”",
+  quote:"I just think async is where accountability goes to die",
+  votes:{NTP:256,YTP:22,ESH:71,NBD:15},verdict:"NTP",comments:93},
+ {id:"FMC-0007301",handle:"founder-6634",time:"1D AGO",charge:"CEO BY VIBES ALONE",
+  text:"We agreed no titles until we raise. He printed business cards that say Founder & CEO anyway. When I pointed at the card he said the C stands for ‘collaborative.’ We are a two-person company. I found out at a dinner when he introduced me as ‘early team.’",
+  quote:"someone has to be the face, and your face is more of an ops face",
+  votes:{NTP:340,YTP:8,ESH:36,NBD:4},verdict:"NTP",comments:118},
+ {id:"FMC-0007298",handle:"founder-3359",time:"1D AGO",charge:"‘TECHNICAL’ IN AIR QUOTES",
+  text:"He listed himself as CTO on the YC application. Yesterday he asked me, in writing, whether we could “host the database on Figma.” I've started a folder. This is exhibit nine.",
+  quote:"I'm technical in the strategic sense",
+  votes:{NTP:490,YTP:6,ESH:12,NBD:8},verdict:"NTP",comments:201,receipt:true},
+ {id:"FMC-0007290",handle:"founder-8821",time:"2D AGO",charge:"ATTEMPTED CALENDAR COUP",
+  text:"I came back from two days of food poisoning to find he'd declined every meeting on my calendar and accepted them on his own. Including my dentist appointment. He went to my dentist appointment. My dentist now thinks HE is the founder.",
+  quote:"the company can't afford single points of failure",
+  votes:{NTP:178,YTP:9,ESH:203,NBD:31},verdict:"ESH",comments:167},
+ {id:"FMC-0007288",handle:"founder-5512",time:"2D AGO",charge:"TOOK ‘RUNWAY’ LITERALLY",
+  text:"Our burn doubled. I audited the card. Among the line items: a ‘brand pilgrimage’ to Art Basel, a $1,900 mechanical keyboard ‘for morale,’ and recurring payments to something called Founder Aura Coaching. The coach is his roommate.",
+  quote:"you can't cut your way to greatness",
+  votes:{NTP:445,YTP:11,ESH:23,NBD:6},verdict:"NTP",comments:156,receipt:true},
+ {id:"FMC-0007281",handle:"founder-7008",time:"3D AGO",charge:"SELECTIVE EQUITY AMNESIA",
+  text:"Asked her to finally sign the vesting docs. She said the energy of the ask felt “transactional.” We are a company. Transactions are the genre. The docs remain unsigned; she remains on a silent retreat I found out about from her out-of-office.",
+  quote:"paperwork locks in fear, not commitment",
+  votes:{NTP:322,YTP:15,ESH:49,NBD:18},verdict:"NTP",comments:74},
+ {id:"FMC-0007277",handle:"founder-1290",time:"3D AGO",charge:"CHRONIC PIVOT ADDICTION",
+  text:"To be fair to him, our original idea was bad. To be less fair, so were the next five, and I picked two of those. We are now ‘AI for something, we'll know it when we see it.’ Neither of us has said the word customer since March.",
+  quote:"we're pre-idea, which is earlier than pre-seed, which means we're early",
+  votes:{NTP:44,YTP:38,ESH:127,NBD:266},verdict:"NBD",comments:59},
+ {id:"FMC-0007270",handle:"founder-4483",time:"4D AGO",charge:"WEAPONIZED ‘QUICK SYNC’",
+  text:"I have realized, reading this site, that I might be the sync person. I scheduled four today. One was titled ‘sync about syncs.’ My cofounder attended all of them with his camera off and, I now suspect, from a beach. Asking honestly: am I the problem?",
+  quote:"(this one is me. the quote is mine.) — ‘alignment is love’",
+  votes:{NTP:12,YTP:389,ESH:41,NBD:7},verdict:"YTP",comments:230},
+ {id:"FMC-0007266",handle:"founder-6120",time:"4D AGO",charge:"GHOSTING THE ROADMAP",
+  text:"Advice needed, not just catharsis: cofounder went quiet for three weeks, resurfaced with a fully redesigned logo nobody asked for, and a Notion titled ‘Why The Rebrand Unblocks Engineering.’ Investors call Friday. What do I even say.",
+  quote:"the old logo was blocking my flow state",
+  votes:{NTP:298,YTP:14,ESH:52,NBD:20},verdict:"NTP",comments:184},
+ {id:"FMC-0007260",handle:"founder-2911",time:"5D AGO",charge:"CEO BY VIBES ALONE",
+  text:"She gave a podcast interview about ‘her company's engineering culture.’ We do not have an engineering culture. We have me, at 2am, and a rubber duck she expensed as ‘team expansion.’ The podcast has 40 minutes of her origin story. I am not in it.",
+  quote:"I kept your name out of it to protect your focus",
+  votes:{NTP:367,YTP:10,ESH:44,NBD:11},verdict:"NTP",comments:99,receipt:true},
+ {id:"FMC-0007254",handle:"founder-8874",time:"5D AGO",charge:"ATTEMPTED CALENDAR COUP",
+  text:"We broke up (professionally) six months ago and honestly, cleanly. Posting because this site needs one story with a happy ending: we used a mediator, split the cap table by contribution, and he still sends me bug reports for the product. Five stars, would dissolve again.",
+  quote:"we said what we meant in writing, once, early",
+  votes:{NTP:88,YTP:5,ESH:9,NBD:301},verdict:"NBD",comments:47},
+];
+
+const lead = v => Object.entries(v).sort((a,b)=>b[1]-a[1])[0][0];
+const totalVotes = v => Object.values(v).reduce((a,b)=>a+b,0);
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function receiptHTML(){
+  return `<figure class="receipt" aria-label="Redacted screenshot exhibit">
+    <div class="rline"><span class="avatar"></span><span class="bubble"><span class="redact">xxxxxxxx</span> 11:52 PM</span></div>
+    <div class="rline"><span class="bubble">hey so small thing, I moved some numbers around in the <span class="redact">xxxxxxxxxx</span>, all vibes, don't stress</span></div>
+    <div class="rline"><span class="bubble">also we should sync on how you reacted to this before you react to this</span></div>
+    <figcaption>EXHIBIT A · METADATA STRIPPED · REDACTED BY AUTHOR</figcaption>
+  </figure>`;
+}
+function votesHTML(v, big){
+  const l = lead(v);
+  return `<div class="votes" role="group" aria-label="Verdict votes">` +
+    Object.keys(V).map(k=>`<button type="button" class="vote v-${k} ${k===l?"lead":""}" title="${V[k]}">${k} <span class="n">${v[k]}</span></button>`).join("") +
+  `</div>`;
+}
+function chrome(inner, dark){
+  return `
+  <header class="masthead">
+    <div class="mark"><b>F/MC</b><span>Fuck My Cofounder</span></div>
+    <div class="docket-meta">PUBLIC DOCKET · <strong>${STORIES.length} OPEN CASES</strong><br>UPDATED CONTINUOUSLY</div>
+  </header>
+  <div class="pagehead">
+    <h1>The <em>Docket</em></h1>
+    <div class="filters" role="group" aria-label="Filters (non-functional in prototype)">
+      <button class="chip" aria-pressed="true">ALL CHARGES</button>
+      <button class="chip" aria-pressed="false">EQUITY</button>
+      <button class="chip" aria-pressed="false">GHOSTING</button>
+      <button class="chip" aria-pressed="false">ADVICE ASKS</button>
+      <button class="chip" aria-pressed="false">CLOSED CASES</button>
+    </div>
+  </div>${inner}`;
+}
+
+/* ---- Variant A: The Docket (master-detail) ---- */
+function renderA(root){
+  root.className="vA";
+  const rows = STORIES.map((s,i)=>`
+    <button class="row v-${lead(s.votes)}" data-i="${i}" aria-current="${i===0}">
+      <span class="caseno">${s.id} · ${s.time} · ${s.handle}</span>
+      <span class="tag">${lead(s.votes)}</span>
+      <span class="charge">${esc(s.charge)}</span>
+      <span class="teaser">${esc(s.text)}</span>
+    </button>`).join("");
+  root.innerHTML = chrome(`
+  <div class="layout">
+    <aside class="index" aria-label="Case index">
+      <div class="index-head"><span>CASE</span><span>VERDICT</span></div>
+      ${rows}
+    </aside>
+    <section class="detail" aria-live="polite"><div data-file></div></section>
+  </div>`);
+  const file = root.querySelector("[data-file]");
+  const detail = root.querySelector(".detail");
+  function show(i, animate){
+    const s = STORIES[i];
+    const l = lead(s.votes);
+    const paint = ()=>{ file.innerHTML = `
+      <article class="file v-${l}">
+        <button type="button" class="close-detail" data-close aria-label="Close case">×</button>
+        <div class="file-top"><span>F/MC INCIDENT REPORT</span><span>${s.id}</span></div>
+        <span class="stamp stamp-in">${V[l]}</span>
+        <div class="file-body">
+          <div><div class="label">CHARGE</div><h2>${esc(s.charge)}</h2></div>
+          <div><div class="label">STATEMENT · ${s.handle} · ${s.time}</div><p class="testimony">${esc(s.text)}</p></div>
+          <div><div class="label">WHEN ASKED, THEY SAID</div><p class="said">“${esc(s.quote)}”</p></div>
+          ${s.receipt?`<div><div class="label">RECEIPTS</div>${receiptHTML()}</div>`:""}
+        </div>
+        <div class="file-verdict">
+          ${votesHTML(s.votes)}
+          <span class="comments" style="font-family:var(--mono);font-size:.6rem;font-weight:800">${s.comments} COMMENTS · ${totalVotes(s.votes)} VERDICTS</span>
+        </div>
+      </article>`;
+      file.querySelector("[data-close]")?.addEventListener("click",()=>detail.classList.remove("open"));
+    };
+    const f = file.querySelector(".file");
+    if(animate && f){ f.classList.add("swap"); setTimeout(paint,180); } else paint();
+    root.querySelectorAll(".row").forEach(r=>r.setAttribute("aria-current", r.dataset.i==i));
+  }
+  root.querySelectorAll(".row").forEach(r=>r.addEventListener("click",()=>{ show(+r.dataset.i,true); detail.classList.add("open"); }));
+  show(0,false);
+}
+
+/* ---- Variant B: The Record (reading stream) ---- */
+function renderB(root){
+  root.className="vB";
+  root.innerHTML = chrome(`
+  <div class="stream">
+    ${STORIES.map(s=>{const l=lead(s.votes);return `
+    <article class="sheet v-${l}">
+      <span class="stamp">${V[l]}</span>
+      <div class="sheet-top"><span>${s.id}</span><span class="who">${s.handle} · ${s.time}</span></div>
+      <div class="sheet-body">
+        <div class="chargeline">CHARGE: ${esc(s.charge)}</div>
+        <p class="testimony">${esc(s.text)}</p>
+        <p class="said">“${esc(s.quote)}”</p>
+        ${s.receipt?receiptHTML():""}
+      </div>
+      <div class="sheet-foot">${votesHTML(s.votes)}<span class="comments">${s.comments} COMMENTS</span></div>
+    </article>`}).join("")}
+  </div>`);
+}
+
+/* ---- Variant C: The Evidence Wall ---- */
+function renderC(root){
+  root.className="vC";
+  root.innerHTML = chrome(`
+  <div class="wall">
+    ${STORIES.map(s=>{const l=lead(s.votes);return `
+    <article class="pin v-${l}">
+      <div class="pin-top"><span>${s.id}</span><span>${s.time}</span></div>
+      <div class="pin-body">
+        <div class="chargeline">${esc(s.charge)}</div>
+        <p class="testimony">${esc(s.text)}</p>
+        ${s.receipt?receiptHTML():""}
+      </div>
+      <span class="stamp">${lead(s.votes)}</span>
+      <div class="pin-foot"><span><b>${totalVotes(s.votes)}</b> VERDICTS</span><span><b>${s.comments}</b> COMMENTS</span><span>${s.handle}</span></div>
+    </article>`}).join("")}
+  </div>`);
+}
+
+/* ---- Variant D: The Ledger (trustmrr-derived) ---- */
+function renderD(root){
+  root.className="vD";
+  const byVotes=[...STORIES].sort((a,b)=>totalVotes(b.votes)-totalVotes(a.votes));
+  const medals=["🥇","🥈","🥉"];
+  const recent=STORIES.slice(0,5);
+  const isAsk=s=>/Advice|advice|am I the problem|What do I even say/.test(s.text);
+  root.innerHTML=`
+  <div class="wrap">
+    <div class="hero">
+      <div class="lockup"><b>F/MC</b> fuckmycofounder.com</div>
+      <h1>Cofounder horror stories,<br>judged in public.</h1>
+      <p>Real founders file real incident reports. The internet returns a verdict. Every case anonymous, every verdict counted.</p>
+      <div class="cta"><input type="search" placeholder="Search the docket…" aria-label="Search"><button class="btn" type="button">File a report</button></div>
+      <nav class="micronav"><a href="#">Docket</a> · <a href="#">Verdicts</a> · <a href="#">Toolkit</a> · <a href="#">About</a></nav>
+    </div>
+
+    <h2 class="kicker">Recently filed</h2>
+    <div class="rail">
+      ${recent.map(s=>`
+      <article class="mini">
+        ${isAsk(s)?`<span class="ribbon">ADVICE ASK</span>`:s.verdict==="NBD"?`<span class="ribbon">CLOSED</span>`:""}
+        <div><div class="t">${esc(s.charge.toLowerCase())} · ${s.time.toLowerCase()}</div>
+        <div class="n">${esc(s.text)}</div></div>
+        <div class="stats">
+          <div class="stat"><div class="l">Verdicts</div><div class="v">${totalVotes(s.votes)}</div></div>
+          <div class="stat"><div class="l">Comments</div><div class="v">${s.comments}</div></div>
+          <div class="stat"><div class="l">Leading</div><div class="v lead-${lead(s.votes)}">${lead(s.votes)}</div></div>
+        </div>
+      </article>`).join("")}
+      <a class="ghost" href="#">Browse all cases →</a>
+    </div>
+
+    <div class="board" style="margin-top:2.5rem">
+      <div class="board-head">
+        <h2>The Docket — most judged this week</h2>
+        <div class="selects"><span class="select">This week ▾</span><span class="select">All charges ▾</span></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>Case</th><th class="col-hide">Filed by</th>
+          <th class="r">Verdicts</th><th class="r">Leading</th>
+        </tr></thead>
+        <tbody>
+          ${byVotes.map((s,i)=>`
+          <tr class="case">
+            <td class="rank">${i<3?medals[i]:i+1}</td>
+            <td class="story"><div class="charge-s">${esc(s.charge)}</div><div class="desc">${esc(s.text)}</div></td>
+            <td class="col-hide"><span class="who"><span class="av">${s.handle.slice(8,9)}</span>${s.handle}</span></td>
+            <td class="r num">${totalVotes(s.votes).toLocaleString()}</td>
+            <td class="r"><span class="lead-${lead(s.votes)}">${lead(s.votes)==="YTP"?"↓":"↑"} ${lead(s.votes)}</span></td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="trust">🛡 Every case is pseudonymous. Contact info is blocked at submission. Takedown requests honored.</div>
+    </div>
+
+    <div class="footer"><span>© fuckmycofounder.com</span><span>Docket · Toolkit · Terms · Takedowns</span></div>
+  </div>`;
+}
+
+/* ---- Variant E: The Casebook (our layout: reading feed + data spine) ---- */
+function renderE(root){
+  root.className="vE";
+  const isAsk=s=>/Advice|advice|am I the problem|What do I even say/.test(s.text);
+  const state=STORIES.map(s=>({...s,votes:{...s.votes},mine:null}));
+  const byVotes=[...state].sort((a,b)=>totalVotes(b.votes)-totalVotes(a.votes)).slice(0,5);
+  const chargeCounts={};state.forEach(s=>chargeCounts[s.charge]=(chargeCounts[s.charge]||0)+1);
+  const topCharges=Object.entries(chargeCounts).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  const K=Object.keys(V);
+  function splitHTML(v){const t=totalVotes(v);return `<div class="split" aria-hidden="true">${K.map(k=>`<i class="s-${k}" style="width:${(v[k]/t*100).toFixed(2)}%"></i>`).join("")}</div>`}
+  root.innerHTML=`
+  <header class="topbar">
+    <div class="lockup"><b>F/MC</b> fuckmycofounder<span style="color:var(--e-mut)">.com</span></div>
+    <nav class="topnav">
+      <a href="#" class="hide-s">Docket</a><a href="#" class="hide-s">Toolkit</a><a href="#" class="hide-s">Takedowns</a>
+      <button class="file-btn" type="button">File a report</button>
+    </nav>
+  </header>
+  <div class="shell">
+    <main>
+      <div class="feedhead">
+        <h1>The docket. <em>Judge accordingly.</em></h1>
+        <div class="tabs" role="group" aria-label="Sort">
+          <button class="tab" aria-pressed="true">Latest</button>
+          <button class="tab" aria-pressed="false">Most judged</button>
+          <button class="tab" aria-pressed="false">Advice asks</button>
+        </div>
+      </div>
+      ${state.map((s,i)=>`
+      <article class="case" data-i="${i}">
+        <div class="case-meta">
+          <span class="chg">${esc(s.charge)}</span>
+          ${isAsk(s)?`<span class="ask">ADVICE ASK</span>`:""}
+          <span>${s.id.toLowerCase()} · ${s.handle} · ${s.time.toLowerCase()}</span>
+        </div>
+        <p class="case-text">${esc(s.text)}</p>
+        <p class="case-quote">“${esc(s.quote)}”</p>
+        <div data-split>${splitHTML(s.votes)}</div>
+        <div class="case-foot">
+          <div class="vbtns" role="group" aria-label="Cast your verdict">
+            ${K.map(k=>`<button type="button" class="vb b-${k}" data-v="${k}" title="${V[k]}">${k} <span class="n">${s.votes[k]}</span></button>`).join("")}
+          </div>
+          <span class="case-links"><b>${s.comments}</b> comments · <b data-total>${totalVotes(s.votes)}</b> verdicts</span>
+        </div>
+      </article>`).join("")}
+    </main>
+    <aside class="rail">
+      <div class="mod">
+        <h2>Most judged this week</h2>
+        <div class="top5">
+          ${byVotes.map((s,i)=>`<a href="#"><span class="rk">${i+1}</span><span class="nm">${esc(s.charge.toLowerCase())} — ${esc(s.text.slice(0,40))}…</span><span class="ct">${totalVotes(s.votes)}</span></a>`).join("")}
+        </div>
+      </div>
+      <div class="mod">
+        <h2>Charges this week</h2>
+        <div class="dist">
+          ${topCharges.map(([c,n])=>{const pc=Math.round(n/state.length*100);return `<div class="row"><span>${esc(c.toLowerCase())}</span><span class="pc">${pc}%</span><span class="bar"><i style="width:${pc}%"></i></span></div>`}).join("")}
+        </div>
+      </div>
+      <div class="mod">
+        <h2>House rules</h2>
+        <p class="trustline">Every case is pseudonymous. Contact info is blocked at submission. Real names in stories are the author's responsibility — <a href="#">takedown requests</a> are honored. Verdicts are opinions, counted.</p>
+      </div>
+    </aside>
+  </div>`;
+  root.querySelectorAll(".case").forEach(el=>{
+    const s=state[+el.dataset.i];
+    el.querySelectorAll(".vb").forEach(btn=>btn.addEventListener("click",()=>{
+      const k=btn.dataset.v;
+      if(s.mine===k) return;
+      if(s.mine) s.votes[s.mine]--;
+      s.votes[k]++; s.mine=k;
+      el.querySelector("[data-split]").innerHTML=splitHTML(s.votes);
+      el.querySelector("[data-total]").textContent=totalVotes(s.votes);
+      el.querySelectorAll(".vb").forEach(b=>{b.classList.toggle("on",b.dataset.v===k);b.querySelector(".n").textContent=s.votes[b.dataset.v]});
+    }));
+  });
+}
+
+/* ---- Variant F: The Timeline (X-native dark) ---- */
+function renderF(root){
+  root.className="vF";
+  const isAsk=s=>/Advice|advice|am I the problem|What do I even say/.test(s.text);
+  const state=STORIES.map(s=>({...s,votes:{...s.votes},mine:null}));
+  const K=Object.keys(V);
+  const chargeCounts={};state.forEach(s=>chargeCounts[s.charge]=(chargeCounts[s.charge]||0)+1);
+  const trends=Object.entries(chargeCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  function pollHTML(s){
+    const t=totalVotes(s.votes);
+    return K.map(k=>{
+      const pc=(s.votes[k]/t*100);
+      return `<button type="button" class="popt f-${k} ${s.mine===k?"mine":""}" data-v="${k}">
+        <span class="fill" style="width:${s.mine?pc.toFixed(1):0}%"></span>
+        <span class="lab">${k} · ${V[k].toLowerCase()}</span>
+        <span class="pc">${s.mine?pc.toFixed(0)+"%":""}</span>
+      </button>`;
+    }).join("");
+  }
+  root.innerHTML=`
+  <div class="frame">
+    <nav class="nav">
+      <div class="lockup"><b>F/MC</b><span>fuckmycofounder</span></div>
+      <a href="#" class="on"><span class="ico">▤</span><span class="txt">Docket</span></a>
+      <a href="#"><span class="ico">⚖</span><span class="txt">Most judged</span></a>
+      <a href="#"><span class="ico">?</span><span class="txt">Advice asks</span></a>
+      <a href="#"><span class="ico">✚</span><span class="txt">Toolkit</span></a>
+      <a href="#"><span class="ico">§</span><span class="txt">House rules</span></a>
+      <button type="button" class="post-btn">File a report</button>
+    </nav>
+    <main class="tl">
+      <div class="tl-head">
+        <button type="button" class="on">Latest</button>
+        <button type="button">Most judged</button>
+      </div>
+      ${state.map((s,i)=>`
+      <article class="post" data-i="${i}">
+        <div class="av">${s.handle.slice(8,9).toUpperCase()}</div>
+        <div>
+          <div class="post-head">
+            <span class="who">${s.handle}</span>
+            <span class="chargechip">${esc(s.charge)}</span>
+            ${isAsk(s)?`<span class="askchip">ADVICE ASK</span>`:""}
+            <span class="meta">· ${s.time.toLowerCase()} · ${s.id.toLowerCase()}</span>
+          </div>
+          <p class="post-text">${esc(s.text)}</p>
+          <div class="qbox"><span class="qwho">when asked, the cofounder said</span><span class="qt">“${esc(s.quote)}”</span></div>
+          <div class="poll" data-poll>${pollHTML(s)}</div>
+          <div class="poll-meta"><span data-total>${totalVotes(s.votes).toLocaleString()}</span> verdicts${!s.mine?" · vote to see results":""}</div>
+          <div class="actions">
+            <span class="act"><span class="g">◳</span>${s.comments}</span>
+            <span class="act"><span class="g">⇄</span>share</span>
+            <span class="act"><span class="g">⚑</span>report</span>
+          </div>
+        </div>
+      </article>`).join("")}
+    </main>
+    <aside class="rail-f">
+      <label class="search">⌕ <input placeholder="Search the docket" aria-label="Search"></label>
+      <div class="panel">
+        <h2>Trending charges</h2>
+        ${trends.map(([c,n],i)=>{
+          const vsum=state.filter(s=>s.charge===c).reduce((a,s)=>a+totalVotes(s.votes),0);
+          return `<a class="trend" href="#"><span class="k">${i+1} · trending in cofounder crime</span><div class="t">${esc(c)}</div><span class="c">${n} cases · ${vsum.toLocaleString()} verdicts</span></a>`;
+        }).join("")}
+      </div>
+      <div class="panel">
+        <h2>House rules</h2>
+        <p class="finefine" style="padding:0 1.1rem .8rem">Pseudonymous by default. Contact info blocked at submission. <a href="#">Takedown requests</a> honored. Verdicts are opinions, counted.</p>
+      </div>
+      <p class="finefine">© fuckmycofounder.com · Toolkit · Terms</p>
+    </aside>
+  </div>`;
+  root.querySelectorAll(".post").forEach(el=>{
+    const s=state[+el.dataset.i];
+    el.querySelectorAll(".popt").forEach(btn=>btn.addEventListener("click",e=>{
+      e.stopPropagation();
+      const k=btn.dataset.v;
+      if(s.mine===k) return;
+      if(s.mine) s.votes[s.mine]--;
+      s.votes[k]++; s.mine=k;
+      el.querySelector("[data-poll]").innerHTML=pollHTML(s);
+      el.querySelector("[data-total]").textContent=totalVotes(s.votes).toLocaleString();
+      el.querySelector(".poll-meta").innerHTML=`<span data-total>${totalVotes(s.votes).toLocaleString()}</span> verdicts`;
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        el.querySelectorAll(".popt .fill").forEach((f,idx)=>{
+          const kk=K[idx];f.style.width=(s.votes[kk]/totalVotes(s.votes)*100).toFixed(1)+"%";
+        });
+      }));
+    }));
+  });
+}
+
+/* ---- switcher ---- */
+const VARIANTS = [
+  {key:"A", name:"The Docket (master–detail)", render:renderA},
+  {key:"B", name:"The Record (reading stream)", render:renderB},
+  {key:"C", name:"The Evidence Wall", render:renderC},
+  {key:"D", name:"The Ledger (trustmrr system)", render:renderD},
+  {key:"E", name:"The Casebook (our layout)", render:renderE},
+  {key:"F", name:"The Timeline (X-native dark)", render:renderF},
+  {key:"G", name:"The Case Timeline (structured posts + exhibits)", render:renderG},
+];
+
+/* ---- Variant G: F's grammar + structured case posts + exhibits ---- */
+function renderG(root){
+  renderF(root);                       // same timeline chassis
+  root.className="vF vG";
+  const QUORUM=430;
+  // 1. structured composer at top of timeline
+  const tl=root.querySelector(".tl");
+  const composer=document.createElement("div");
+  composer.className="composer";
+  composer.innerHTML=`
+    <div class="av">+</div>
+    <div>
+      <div class="prompt">File a report. <b>Three blanks, that's the whole form.</b></div>
+      <div class="chargepick" role="group" aria-label="Pick the charge">
+        ${[...new Set(STORIES.map(s=>s.charge))].map((c,i)=>`<button type="button" class="cp ${i===0?"on":""}">${esc(c)}</button>`).join("")}
+      </div>
+      <input class="cfield" placeholder="My cofounder… (what happened)">
+      <input class="cfield" placeholder="When asked, they said… (verbatim, we know you have it)">
+      <div class="composer-foot">
+        <div class="dropzone">⧉ drop receipts — the redaction brush runs before anything uploads</div>
+        <button type="button" class="go">File it</button>
+      </div>
+    </div>`;
+  tl.insertBefore(composer, tl.children[1]);
+  composer.querySelectorAll(".cp").forEach(b=>b.addEventListener("click",()=>{
+    composer.querySelectorAll(".cp").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  }));
+  // 2. exhibits strip + verdict stamp on each post
+  root.querySelectorAll(".post").forEach(el=>{
+    const s=STORIES[+el.dataset.i];
+    const body=el.children[1];
+    if(s.receipt){
+      const ex=document.createElement("div");
+      ex.className="exhibits";
+      ex.innerHTML=`
+        <figure class="exh"><div class="shot">
+          <div class="l dark w40"></div><div class="l w85"></div><div class="l w70"></div><div class="l dark w55"></div>
+        </div><figcaption class="tagbar"><span>EXHIBIT A</span><span>SLACK</span></figcaption></figure>
+        <figure class="exh"><div class="grid"></div>
+        <figcaption class="tagbar"><span>EXHIBIT B</span><span>CAP TABLE</span></figcaption></figure>`;
+      body.insertBefore(ex, body.querySelector(".poll"));
+      el.querySelector(".qbox")?.remove();   // exhibits replace the quote box where receipts exist
+    }
+    if(totalVotes(s.votes)>QUORUM){
+      const st=document.createElement("span");
+      const l=lead(s.votes);
+      st.className=`stamp-g sg-${l}`;
+      st.textContent=`VERDICT · ${V[l]}`;
+      el.appendChild(st);
+    }
+  });
+}
+const app = document.getElementById("app");
+const label = document.querySelector("[data-label]");
+function current(){ const k = new URLSearchParams(location.search).get("variant")||"A";
+  return Math.max(0, VARIANTS.findIndex(v=>v.key===k)); }
+function go(i){
+  const v = VARIANTS[(i+VARIANTS.length)%VARIANTS.length];
+  const u = new URL(location); u.searchParams.set("variant",v.key); history.replaceState(null,"",u);
+  label.textContent = `${v.key} — ${v.name}`;
+  window.scrollTo(0,0); v.render(app);
+}
+document.querySelector("[data-prev]").addEventListener("click",()=>go(current()-1));
+document.querySelector("[data-next]").addEventListener("click",()=>go(current()+1));
+addEventListener("keydown",e=>{
+  if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)||document.activeElement.isContentEditable) return;
+  if(e.key==="ArrowLeft") go(current()-1);
+  if(e.key==="ArrowRight") go(current()+1);
+});
+go(current());
+</script>
+</body>
+</html>

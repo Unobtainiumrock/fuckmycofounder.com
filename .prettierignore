@@ -1,0 +1,11 @@
+.next
+node_modules
+public
+assets
+prototype
+test-results
+tests/e2e/*-snapshots
+tests/*.test.js
+docs/research
+openspec/changes
+pnpm-lock.yaml
