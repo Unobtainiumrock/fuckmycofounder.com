@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f4eddf">
-    <meta name="description" content="Turn cofounder chaos into a redacted, shareable incident report. No accounts. No uploads. No names.">
+    <meta name="description" content="Turn cofounder chaos into a shareable incident report. No account. No filter.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Fuck My Cofounder — File an Incident Report">
     <meta property="og:description" content="Some startups need a pivot. Some need an incident report.">
@@ -12,7 +12,7 @@
     <meta property="og:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Fuck My Cofounder">
-    <meta name="twitter:description" content="File a completely unofficial cofounder incident report.">
+    <meta name="twitter:description" content="File a cofounder incident report.">
     <meta name="twitter:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Fuck My Cofounder — File an Incident Report</title>
@@ -33,7 +33,6 @@
         <span class="wordmark__mark" aria-hidden="true">F/MC</span>
         <span class="wordmark__text">Fuck My Cofounder</span>
       </a>
-      <div class="header-status"><span aria-hidden="true"></span> definitely not legal advice</div>
     </header>
 
     <main id="main">
@@ -41,7 +40,7 @@
         <p class="eyebrow">A SAFE SPACE FOR UNSAFE SLACK THREADS</p>
         <h1 id="hero-title">Some startups need a pivot.<br><em>Some need an exorcism.</em></h1>
         <div class="hero__lower">
-          <p class="hero__lede">Convert founder chaos into a completely unofficial, aggressively redacted incident report. No account. No upload. No names.</p>
+          <p class="hero__lede">Convert founder chaos into a shareable incident report. No account. No upload. No filter.</p>
           <p class="hero__case" aria-hidden="true">CASE NO. <span data-case-ticker>000001</span><br>VIBES JURISDICTION</p>
         </div>
       </section>
@@ -65,7 +64,6 @@
             <button class="button button--disabled" type="button" disabled>
               Coming soon-ish <span aria-hidden="true">↗</span>
             </button>
-            <div class="mode-card__tape" aria-hidden="true">LAWYERS SAID “ABSOLUTELY NOT YET”</div>
           </article>
 
           <article class="mode-card mode-card--report" aria-labelledby="report-title">
@@ -75,7 +73,7 @@
             </div>
             <div>
               <h3 id="report-title">File an<br>Incident Report</h3>
-              <p>Tell the story without telling on anyone. Receive the board disposition you deserve.</p>
+              <p>Tell the whole story. Receive the board disposition you deserve.</p>
             </div>
             <button class="button button--dark" type="button" data-start-report>
               Begin emotional paperwork <span aria-hidden="true">↗</span>
@@ -86,23 +84,21 @@
 
       <section class="process" aria-labelledby="process-title">
         <p class="eyebrow">THE THREE-STAGE GRIEF PIPELINE</p>
-        <h2 id="process-title">Vent. Redact. Release.</h2>
+        <h2 id="process-title">Vent. File. Release.</h2>
         <ol class="process__steps">
           <li><span>01</span><strong>Pick the charge</strong><small>Equity amnesia? Pivot addiction? Weaponized “quick sync”?</small></li>
-          <li><span>02</span><strong>Remove the identifiers</strong><small>No names, handles, links, companies, or courtroom exhibits.</small></li>
+          <li><span>02</span><strong>Tell it straight</strong><small>The 6 a.m. all-hands, the vanished runway, the whole cap-table saga.</small></li>
           <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a client-side-only link into the group chat.</small></li>
         </ol>
       </section>
 
       <section class="manifesto" aria-label="Site promise">
-        <p>THIS IS FOR <strong>COMEDY + CATHARSIS</strong>, NOT HARASSMENT + DOXXING.</p>
         <p>Your draft never leaves your browser. We literally built no place to send it.</p>
       </section>
     </main>
 
     <footer class="site-footer">
       <p>© <span data-year></span> FUCKMYCOFOUNDER.COM</p>
-      <p>PARODY. CATHARSIS. ZERO AFFILIATION WITH YOUR BOARD.</p>
     </footer>
 
     <dialog class="report-dialog" data-report-dialog aria-labelledby="dialog-title">
@@ -135,11 +131,8 @@
           </section>
 
           <section class="form-step" data-step="2" aria-labelledby="step-two-title" hidden>
-            <p class="form-kicker">SECTION B / THE HEAVILY REDACTED LORE</p>
-            <h3 id="step-two-title">Give us the board-safe version.</h3>
-            <div class="privacy-note">
-              <strong>Redaction oath:</strong> No names, company names, @handles, emails, links, phone numbers, or identifying details. Make it funny; make it unfindable.
-            </div>
+            <p class="form-kicker">SECTION B / THE LORE</p>
+            <h3 id="step-two-title">Give us your side of it.</h3>
             <label class="field">
               <span>My cofounder…</span>
               <textarea name="incident" rows="3" maxlength="180" required placeholder="called a 6 a.m. all-hands to unveil the exact idea we rejected yesterday"></textarea>
@@ -158,11 +151,6 @@
               <small><span data-count="translation">0</span>/80</small>
               <span class="field-error" data-error="translation" role="alert"></span>
             </label>
-            <label class="check-field">
-              <input name="redacted" type="checkbox" required>
-              <span>I removed identifying details and understand this is parody, not a public accusation.</span>
-            </label>
-            <p class="field-error" data-error="redacted" role="alert"></p>
             <div class="form-actions">
               <button class="button button--outline" type="button" data-back="1">← Back</button>
               <button class="button button--red" type="submit">Generate case file ↗</button>
@@ -172,7 +160,7 @@
           <section class="form-step" data-step="3" aria-labelledby="step-three-title" hidden>
             <div class="result-heading">
               <div>
-                <p class="form-kicker">SECTION C / OFFICIAL-ISH FINDINGS</p>
+                <p class="form-kicker">SECTION C / FINDINGS</p>
                 <h3 id="step-three-title">The board has reviewed the vibes.</h3>
               </div>
               <button class="text-button" type="button" data-start-over>Start over</button>
@@ -193,16 +181,15 @@
               <footer>
                 <span>BOARD DISPOSITION</span>
                 <strong data-report-disposition></strong>
-                <small>fuckmycofounder.com · satire, obviously</small>
+                <small>fuckmycofounder.com</small>
               </footer>
             </article>
 
             <div class="share-actions">
-              <button class="button button--red" type="button" data-share-report>Share the evidence*</button>
+              <button class="button button--red" type="button" data-share-report>Share the evidence</button>
               <button class="button button--outline" type="button" data-download-report>Download card</button>
               <button class="button button--outline" type="button" data-copy-link>Copy private-ish link</button>
             </div>
-            <p class="share-note">*The “evidence” is a joke you typed yourself. Shared links contain the redacted text after the # and do not send it to our server.</p>
             <div class="toast" data-toast role="status" aria-live="polite"></div>
           </section>
         </form>

@@ -1,6 +1,6 @@
 # fuckmycofounder.com
 
-A dependency-free static satire site and privacy-first cofounder incident-report generator.
+A dependency-free static site where founders share cofounder horror stories as incident reports.
 
 ## Local preview
 

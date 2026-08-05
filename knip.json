@@ -1,0 +1,9 @@
+{
+  "entry": [
+    "app/**/*.{ts,tsx}",
+    "scripts/**/*.ts",
+    "tests/**/*.{test,spec}.ts"
+  ],
+  "project": ["app/**/*.{ts,tsx}", "src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+  "ignore": ["tests/fixtures/**", "tests/lint-fixtures/**"]
+}

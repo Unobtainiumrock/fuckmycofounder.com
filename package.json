@@ -3,7 +3,55 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.18.x"
+  },
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "build": "next build",
+    "check:architecture": "dependency-cruiser --config .dependency-cruiser.cjs app src scripts && vitest run tests/contracts/architecture.test.ts",
+    "check:file-sizes": "node scripts/quality/check-source-size.ts",
+    "check:unused": "knip",
+    "dev": "next dev",
+    "format": "prettier --write app src scripts tests next.config.ts playwright.config.ts vitest.config.ts eslint.config.mjs",
+    "format:check": "prettier --check app src scripts tests next.config.ts playwright.config.ts vitest.config.ts eslint.config.mjs",
+    "lint": "eslint app src scripts tests --ignore-pattern tests/lint-fixtures/failing.ts",
+    "openspec:validate": "openspec validate --all --strict --no-interactive",
+    "serve:test": "node scripts/test/serve-standalone.ts",
+    "start": "next start",
+    "test": "pnpm test:legacy && pnpm test:unit",
+    "test:container": "bash scripts/test/container-smoke.sh",
+    "test:e2e": "playwright test",
+    "test:integration": "pnpm test:postgres && pnpm test:http",
+    "test:http": "pnpm build && node scripts/test/run-production-http.ts",
+    "test:legacy": "node --test tests/*.test.js",
+    "test:postgres": "vitest run tests/integration/postgres-foundation.test.ts",
+    "test:unit": "vitest run tests/unit tests/contracts",
+    "typecheck": "tsc --noEmit"
+  },
+  "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0",
+  "dependencies": {
+    "next": "16.2.11",
+    "node-pg-migrate": "9.0.0",
+    "pg": "8.22.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "1.6.0",
+    "@playwright/test": "1.58.2",
+    "@types/node": "24.10.1",
+    "@types/pg": "8.15.5",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "dependency-cruiser": "17.3.8",
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.2.11",
+    "knip": "5.83.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.66.0",
+    "vitest": "4.0.18"
   }
 }

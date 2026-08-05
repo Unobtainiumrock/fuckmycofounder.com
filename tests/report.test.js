@@ -28,10 +28,11 @@ test("generated reports are deterministic", () => {
   assert.match(buildReport(payload).id, /^FMC-[A-Z0-9]{7}$/u);
 });
 
-test("redaction checks reject common identifiers", () => {
+test("contact info is rejected, names and handles pass", () => {
   assert.match(validateStatement("incident", "emailed founder@example.com yesterday"), /email address/u);
-  assert.match(validateStatement("incident", "posted it at https:\/\/example.com"), /link/u);
-  assert.match(validateStatement("incident", "slacked @definitely_a_person"), /@handle/u);
+  assert.match(validateStatement("incident", "texted me from 415-555-0134 at midnight"), /phone number/u);
+  assert.equal(validateStatement("incident", "slacked @definitely_a_person"), "");
+  assert.equal(validateStatement("incident", "posted it at https://example.com first"), "");
   assert.equal(validateStatement("incident", payload.incident), "");
 });
 
