@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  projectPublicBuildConfig,
-  readApplicationConfig,
-} from "@/src/platform/runtime/application-config";
+import { readApplicationConfig } from "@/src/platform/runtime/application-config";
+import { projectPublicBuildConfig } from "@/src/shared/public-build-config";
 
 describe("application configuration", () => {
   it("provides explicit safe local defaults", () => {
@@ -12,6 +10,10 @@ describe("application configuration", () => {
       buildId: "development",
       databaseRequired: false,
     });
+  });
+
+  it("initializes the process configuration once", () => {
+    expect(readApplicationConfig()).toBe(readApplicationConfig());
   });
 
   it("requires immutable identity and the database in production", () => {

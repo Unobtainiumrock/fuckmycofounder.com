@@ -19,14 +19,15 @@ interface ApplicationConfig {
   readonly databaseUrl?: string;
 }
 
-interface PublicBuildConfig {
-  readonly appEnvironment: ApplicationConfig["appEnvironment"];
-  readonly buildId: string;
-}
+let processApplicationConfig: ApplicationConfig | undefined;
 
 export function readApplicationConfig(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): ApplicationConfig {
+  if (environment === process.env && processApplicationConfig) {
+    return processApplicationConfig;
+  }
+
   const parsed = environmentSchema.safeParse(environment);
 
   if (!parsed.success) {
@@ -47,21 +48,18 @@ export function readApplicationConfig(
     throw new Error("Application configuration is invalid");
   }
 
-  return {
+  const application = {
     appEnvironment,
     buildId,
     databaseRequired,
     ...(parsed.data.DATABASE_URL
       ? { databaseUrl: parsed.data.DATABASE_URL }
       : {}),
-  };
-}
+  } satisfies ApplicationConfig;
 
-export function projectPublicBuildConfig(
-  application: ApplicationConfig,
-): PublicBuildConfig {
-  return {
-    appEnvironment: application.appEnvironment,
-    buildId: application.buildId,
-  };
+  if (environment === process.env) {
+    processApplicationConfig = application;
+  }
+
+  return application;
 }

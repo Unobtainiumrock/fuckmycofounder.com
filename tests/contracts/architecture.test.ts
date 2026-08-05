@@ -82,6 +82,14 @@ describe("module dependency direction", () => {
     expect(result.output).toContain("client-cannot-import-platform");
   });
 
+  it("allows browser code to import only the public config projection", async () => {
+    const result = await cruise(
+      "tests/fixtures/architecture/public-config-client",
+    );
+
+    expect(result.code, result.output).toBe(0);
+  });
+
   it("rejects metadata code importing persistence", async () => {
     const result = await cruise("tests/fixtures/architecture/metadata-leak");
 
