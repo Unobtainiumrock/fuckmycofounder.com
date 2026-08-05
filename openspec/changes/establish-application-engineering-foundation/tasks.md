@@ -42,5 +42,5 @@
 ## 7. Close-out
 
 - [x] 7.1 Run the complete canonical gate from a clean checkout and document exact runtime, framework, package, database-tooling, and container versions plus any intentionally deferred provider choices.
-- [ ] 7.2 Complete independent standards and spec review, threat-model the private/public projection and test-database guards, and correct every high-severity finding before marking the foundation implemented.
+- [x] 7.2 Complete independent standards and spec review, threat-model the private/public projection and test-database guards, and correct every high-severity finding before marking the foundation implemented.
 - [x] 7.3 Confirm the product implementation order records the now-implemented engineering foundation as the prerequisite for every network feature, while keeping deployment and live-provider setup as separately authorized work.

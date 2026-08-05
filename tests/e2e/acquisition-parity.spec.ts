@@ -12,10 +12,10 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
     }),
   ).toBeVisible();
   if (process.platform === "darwin") {
-    await expect(page).toHaveScreenshot("acquisition-home.png", {
-      animations: "disabled",
-      fullPage: true,
-    });
+    await expect(page.locator("body")).toHaveScreenshot(
+      "acquisition-home.png",
+      { animations: "disabled" },
+    );
   }
 
   await page.getByRole("button", { name: "Begin emotional paperwork" }).click();
