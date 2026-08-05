@@ -1,4 +1,5 @@
 import { CHARGES, DISPOSITIONS, SEVERITIES } from "./content.js";
+import { fitCaseFileFields } from "./text-fit.js";
 import { normalizeText } from "./validation.js";
 
 function hashText(value) {
@@ -16,17 +17,37 @@ export function buildReport(payload) {
   const quote = normalizeText(payload.quote);
   const translation = normalizeText(payload.translation);
   const hash = hashText(`${charge.id}|${incident}|${quote}|${translation}`);
+  const derivedId = `FMC-${hash.toString(36).toUpperCase().padStart(7, "0").slice(-7)}`;
 
   return {
-    id: `FMC-${hash.toString(36).toUpperCase().padStart(7, "0").slice(-7)}`,
+    id: payload.id ?? derivedId,
     chargeId: charge.id,
     charge: charge.label,
     incident,
     quote,
     translation,
     severity: SEVERITIES[hash % SEVERITIES.length],
-    disposition: DISPOSITIONS[(hash >>> 5) % DISPOSITIONS.length]
+    disposition: DISPOSITIONS[(hash >>> 5) % DISPOSITIONS.length],
+    avatarUrl: payload.avatarUrl ?? null,
+    cardUrl: payload.cardUrl ?? null,
+    persisted: Boolean(payload.persisted)
   };
+}
+
+function renderAvatar(report, root) {
+  const subject = root.querySelector("[data-report-subject]");
+  const avatar = root.querySelector("[data-report-avatar]");
+  if (!subject || !avatar) return;
+
+  if (report.avatarUrl) {
+    subject.hidden = false;
+    avatar.src = report.avatarUrl;
+    avatar.alt = "Subject mugshot";
+  } else {
+    subject.hidden = true;
+    avatar.removeAttribute("src");
+    avatar.alt = "";
+  }
 }
 
 export function renderReport(report, root) {
@@ -42,6 +63,12 @@ export function renderReport(report, root) {
 
   for (const [selector, text] of Object.entries(fields)) {
     const element = root.querySelector(selector);
-    if (element) element.textContent = text;
+    if (element) {
+      element.style.fontSize = "";
+      element.textContent = text;
+    }
   }
+
+  renderAvatar(report, root);
+  requestAnimationFrame(() => fitCaseFileFields(root));
 }

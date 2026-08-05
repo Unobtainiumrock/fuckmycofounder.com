@@ -1,34 +1,49 @@
+import { drawCanvasLines, fitCanvasSection } from "./text-fit.js";
+
 const WIDTH = 1200;
 const HEIGHT = 1500;
 const COLORS = { paper: "#f4eddf", ink: "#151515", red: "#ff3b20", acid: "#d8ff3e" };
-
-function wrapLines(context, text, maxWidth) {
-  const words = text.split(/\s+/u);
-  const lines = [];
-  let current = "";
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (context.measureText(candidate).width <= maxWidth || !current) current = candidate;
-    else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function drawWrapped(context, text, x, y, maxWidth, lineHeight, maxLines = 4) {
-  const lines = wrapLines(context, text, maxWidth).slice(0, maxLines);
-  lines.forEach((line, index) => context.fillText(line, x, y + index * lineHeight));
-  return y + lines.length * lineHeight;
-}
 
 function label(context, text, x, y) {
   context.fillStyle = "rgba(244,237,223,.62)";
   context.font = "700 23px monospace";
   context.fillText(text, x, y);
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Avatar load failed."));
+    image.src = url;
+  });
+}
+
+const AVATAR = { size: 200, pad: 12, caption: 38, top: 172 };
+const AVATAR_FRAME_WIDTH = AVATAR.size + AVATAR.pad * 2;
+const AVATAR_BOTTOM = AVATAR.top + AVATAR.size + AVATAR.pad + AVATAR.caption + 24;
+
+function drawAvatar(context, image) {
+  const frameHeight = AVATAR.size + AVATAR.pad + AVATAR.caption;
+  const x = WIDTH - 72 - AVATAR_FRAME_WIDTH;
+  const y = AVATAR.top;
+
+  context.save();
+  context.translate(x + AVATAR_FRAME_WIDTH / 2, y + frameHeight / 2);
+  context.rotate(0.028);
+  context.translate(-AVATAR_FRAME_WIDTH / 2, -frameHeight / 2);
+  context.fillStyle = "rgba(0,0,0,.45)";
+  context.fillRect(10, 10, AVATAR_FRAME_WIDTH, frameHeight);
+  context.fillStyle = COLORS.paper;
+  context.fillRect(0, 0, AVATAR_FRAME_WIDTH, frameHeight);
+  context.drawImage(image, AVATAR.pad, AVATAR.pad, AVATAR.size, AVATAR.size);
+  context.fillStyle = COLORS.ink;
+  context.font = "900 22px monospace";
+  context.textAlign = "center";
+  context.fillText("SUBJECT", AVATAR_FRAME_WIDTH / 2, AVATAR.size + AVATAR.pad + 28);
+  context.restore();
+  context.textAlign = "left";
 }
 
 export async function renderCardBlob(report) {
@@ -55,6 +70,16 @@ export async function renderCardBlob(report) {
   context.lineTo(WIDTH - 72, 145);
   context.stroke();
 
+  let avatarDrawn = false;
+  if (report.avatarUrl) {
+    try {
+      drawAvatar(context, await loadImage(report.avatarUrl));
+      avatarDrawn = true;
+    } catch {
+      // Card still renders without the mugshot.
+    }
+  }
+
   context.save();
   context.translate(78, 215);
   context.rotate(-0.018);
@@ -69,22 +94,26 @@ export async function renderCardBlob(report) {
   const left = 72;
   const max = WIDTH - 144;
   const sections = [
-    ["CHARGE", report.charge, 46, 56, 2],
-    ["STATEMENT", `My cofounder ${report.incident}.`, 37, 48, 4],
-    ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 3],
-    ["ADULT TRANSLATION", report.translation, 37, 48, 3]
+    ["CHARGE", report.charge, 46, 56, 2, 30],
+    ["STATEMENT", `My cofounder ${report.incident}.`, 37, 48, 5, 24],
+    ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 4, 24],
+    ["ADULT TRANSLATION", report.translation, 37, 48, 3, 24]
   ];
 
-  for (const [heading, text, size, lineHeight, maxLines] of sections) {
+  for (const [heading, text, baseSize, lineHeight, maxLines, minSize] of sections) {
+    // Keep text clear of the polaroid while a section sits beside it.
+    const besideAvatar = avatarDrawn && y < AVATAR_BOTTOM;
+    const sectionMax = besideAvatar ? max - AVATAR_FRAME_WIDTH - 48 : max;
     label(context, heading, left, y);
     y += 48;
     context.fillStyle = COLORS.paper;
-    context.font = `700 ${size}px Arial, sans-serif`;
-    y = drawWrapped(context, text, left, y, max, lineHeight, maxLines) + 38;
+    const fitted = fitCanvasSection(context, text, sectionMax, baseSize, minSize, maxLines, lineHeight);
+    context.font = fitted.font;
+    y = drawCanvasLines(context, fitted.lines, left, y, lineHeight) + 38;
     context.strokeStyle = "rgba(244,237,223,.16)";
     context.beginPath();
     context.moveTo(left, y - 15);
-    context.lineTo(WIDTH - left, y - 15);
+    context.lineTo(besideAvatar ? left + sectionMax : WIDTH - left, y - 15);
     context.stroke();
   }
 
@@ -93,8 +122,18 @@ export async function renderCardBlob(report) {
   context.fillRect(left, footerTop, WIDTH - left * 2, 5);
   label(context, "BOARD DISPOSITION", left, footerTop + 55);
   context.fillStyle = COLORS.acid;
-  context.font = "900 61px Impact, Arial Narrow, sans-serif";
-  drawWrapped(context, report.disposition.toUpperCase(), left, footerTop + 125, max, 67, 3);
+  const disposition = fitCanvasSection(
+    context,
+    report.disposition.toUpperCase(),
+    max,
+    80,
+    34,
+    3,
+    67,
+    (size) => `900 ${size}px Impact, Arial Narrow, sans-serif`
+  );
+  context.font = disposition.font;
+  drawCanvasLines(context, disposition.lines, left, footerTop + 125, 67);
   context.fillStyle = "rgba(244,237,223,.62)";
   context.font = "700 24px monospace";
   context.fillText("FUCKMYCOFOUNDER.COM", left, HEIGHT - 67);

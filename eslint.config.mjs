@@ -34,4 +34,14 @@ export default tseslint.config(
       "max-params": ["error", 5],
     },
   },
+  {
+    files: ["scripts/*.mjs"],
+    ...tseslint.configs.disableTypeChecked,
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      complexity: ["error", 15],
+      "max-depth": ["error", 3],
+      "max-params": ["error", 5],
+    },
+  },
 );

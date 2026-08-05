@@ -1,12 +1,67 @@
 # fuckmycofounder.com
 
-The founder-network product begins with the Caseboard landing experience and
-Cooked Quiz, served by the same Next.js application that will own later
-Profiles, Reviews, Posts, Feed, messaging, and trust features.
+A dependency-free static satire site and privacy-first cofounder incident-report generator.
 
-## Local development
+## Production deploys
 
-Use Node 24.18.0 and Corepack, then install and run the app:
+Pushes to `main` auto-deploy to Cloudflare Pages via [`.github/workflows/deploy-production.yml`](.github/workflows/deploy-production.yml) (tests → `npm run build` → `wrangler pages deploy dist`). Manual ship:
+
+```bash
+export CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=c982ff5aa7f77c62715b25611839a9ff
+npm run build
+npx wrangler pages deploy dist --project-name=fuckmycofounder --branch=main
+```
+
+Required GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
+### Asset fingerprinting
+
+`npm run build` ([`scripts/build.mjs`](scripts/build.mjs)) copies the site into `dist/` with every JS and CSS file renamed to `name.<content-hash>.ext`, rewriting each import specifier and `<link>`/`<script>` reference to match. Hashes are computed leaves-first, so editing a deep module (`shared/case-limits.js`, `report.js`) also changes the hash of everything that imports it — the whole graph busts, not just the entry point.
+
+That makes every URL content-addressed, so [`_headers`](_headers) can mark JS/CSS `immutable` and no deploy can leave a browser on a stale module. HTML always revalidates; images and icons keep stable filenames because their URLs appear in social-preview metadata.
+
+Never hand-write a `?v=` query string on an import; the build owns cache busting.
+
+## Local preview
+
+```bash
+python3 -m http.server 4173
+```
+
+Open `http://127.0.0.1:4173`. The source tree runs unbuilt — references are unhashed, so edits show up on reload. Persisted cases (optional mugshots + PNG cards) require Cloudflare Pages Functions with KV and R2 bindings.
+
+### Cloudflare bindings (one-time)
+
+1. Create KV namespace `FMC_CASES`, R2 bucket `fmc-cases`, and D1 database `fmc-threads`.
+2. In Pages → **fuckmycofounder** → Settings → Functions, bind:
+   - `FMC_CASES` → KV namespace
+   - `FMC_R2` → R2 bucket `fmc-cases`
+   - `FMC_DB` → D1 database `fmc-threads`
+3. Paste IDs into [`wrangler.toml`](wrangler.toml) for local Functions dev.
+4. Apply thread schema: `npx wrangler d1 migrations apply fmc-threads --remote`
+
+Local static preview (`python3 -m http.server`) serves the UI only; `POST /api/cases` needs `wrangler pages dev` or a deployed Pages preview.
+
+```bash
+npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2 --d1 FMC_DB=fmc-threads
+```
+
+## Structure
+
+- `index.html` — semantic page shell and report dialog
+- `board/` — dedicated Town Board page with per-case corroboration threads
+- `assets/css/` — reset, tokens, shared components, and page layout
+- `assets/js/modules/` — copy, validation, report generation, card rendering, sharing, and UI flow
+- `functions/` — Pages Functions for case persistence (KV + R2), Town Board feed, and D1 comment threads (`GET/POST /api/cases/:id/comments`)
+- `migrations/` — D1 SQL for `threads` + `comments`
+- `shared/` — validation limits shared by client and edge handlers
+- `scripts/` — the fingerprinting build that emits `dist/`
+- `assets/images/` and `assets/icons/` — social preview and favicon
+
+## Application foundation
+
+The server-rendered Next.js foundation for the planned network lives in `app/`
+and `src/`. Use Node 24.18.0 with Corepack:
 
 ```bash
 corepack enable
@@ -14,17 +69,8 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open `http://127.0.0.1:3000`. Local startup has no database dependency unless
-`REQUIRE_DATABASE=true` and an explicit safe `DATABASE_URL` are supplied.
-
-## Repository map
-
-- `app/` — Next.js composition, pages, metadata, and Route Handlers
-- `src/modules/` — framework-neutral domain/application modules
-- `src/platform/` — server-only runtime adapters and policy enforcement
-- `src/shared/` — small primitives with demonstrated cross-module reuse
-- `tests/` — unit, contract, Postgres, production HTTP, and browser proof
-- `openspec/` — accepted product and engineering change contracts
-
-Read `AGENTS.md` before implementation. The full reproducible gate and its
-disposable Postgres prerequisite are documented in `openspec/README.md`.
+`pnpm build:app` builds that application. `pnpm build` intentionally remains
+the existing static Cloudflare production build until a separately authorized
+cutover retires that deployment path. Read `AGENTS.md` before implementation;
+the canonical repository gates and disposable Postgres prerequisite are in
+`openspec/README.md`.

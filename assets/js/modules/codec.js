@@ -1,3 +1,7 @@
+import { normalizeCaseId } from "../../../shared/case-limits.js";
+
+export { normalizeCaseId };
+
 const MAX_FRAGMENT_LENGTH = 1800;
 
 function bytesToBase64(bytes) {
@@ -36,4 +40,14 @@ export function decodeReportFragment(hash) {
   } catch {
     return null;
   }
+}
+
+export function decodeCaseFragment(hash) {
+  if (!hash.startsWith("#c=")) return null;
+  return normalizeCaseId(hash.slice(3));
+}
+
+export function parseCasePath(pathname) {
+  const match = pathname.match(/^\/c\/(FMC-[A-Z2-7]{7})\/?$/iu);
+  return match ? normalizeCaseId(match[1]) : null;
 }

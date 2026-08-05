@@ -41,8 +41,8 @@ jobs:
       - run: pnpm check:architecture
       - run: pnpm check:unused
       - run: pnpm typecheck
-      - run: pnpm build
-      - run: pnpm test
+      - run: pnpm build:app
+      - run: pnpm test:all
       - run: pnpm test:integration
         env:
           DATABASE_TEST_URL: postgres://fmcf_test:fmcf_test_password@127.0.0.1:5432/fmcf_test

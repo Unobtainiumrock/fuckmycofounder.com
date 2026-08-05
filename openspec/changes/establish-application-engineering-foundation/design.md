@@ -62,14 +62,19 @@ pnpm format
 pnpm format:check
 pnpm lint
 pnpm typecheck
-pnpm build
-pnpm test
+pnpm build:app
+pnpm test:all
 pnpm test:integration
 pnpm test:e2e
 pnpm check:architecture
 pnpm check:file-sizes
 pnpm openspec:validate
 ```
+
+During the compatibility period, unqualified `build` and `test` preserve the
+existing Cloudflare static production workflow. `build:app` and `test:all` are
+the canonical foundation gates until that deployment path is explicitly cut
+over.
 
 `pnpm format` is the local formatter and `pnpm format:check` is the non-mutating gate. Prettier owns formatting; type-aware ESLint owns unsafe TypeScript, Promises, React, complexity, nesting, and parameters; a TypeScript-aware dependency check owns cycles and direction; Vitest owns domain/component tests; disposable Postgres owns persistence integration; Playwright owns critical user journeys. Pull-request CI installs from the frozen pnpm lockfile and runs the whole clean-checkout gate.
 

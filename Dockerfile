@@ -14,7 +14,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN case "$BUILD_ID" in ""|*[!A-Za-z0-9._-]*) exit 1 ;; esac \
     && [ "${#BUILD_ID}" -le 128 ] \
     && printf 'export const artifactBuildId = "%s";\n' "$BUILD_ID" > src/platform/runtime/artifact-build-id.ts \
-    && pnpm build
+    && pnpm build:app
 
 FROM node:24.18.0-alpine AS runner
 WORKDIR /app

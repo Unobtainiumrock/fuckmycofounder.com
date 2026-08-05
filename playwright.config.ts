@@ -13,7 +13,7 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: "pnpm build && pnpm serve:test",
+          command: "pnpm build:app && pnpm serve:test",
           reuseExistingServer: false,
           timeout: 120_000,
           url: baseURL,

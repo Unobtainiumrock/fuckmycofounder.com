@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4eddf">
+    <meta name="description" content="The Town Board — public cofounder incident filings. Newest first. Still satire.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="The Town Board — Fuck My Cofounder">
+    <meta property="og:description" content="Public record of redacted cofounder incident reports.">
+    <meta property="og:url" content="https://fuckmycofounder.com/board">
+    <meta property="og:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Town Board">
+    <meta name="twitter:description" content="Public record of redacted cofounder incident reports.">
+    <meta name="twitter:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>The Town Board — Fuck My Cofounder</title>
+    <link rel="canonical" href="https://fuckmycofounder.com/board">
+    <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/assets/css/reset.css">
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/base.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/board.css">
+    <script type="module" src="/assets/js/board.js"></script>
+  </head>
+  <body class="board-page">
+    <a class="skip-link" href="#main">Skip to the public record</a>
+
+    <header class="site-header" aria-label="Primary">
+      <a class="wordmark" href="/" aria-label="Fuck My Cofounder home">
+        <span class="wordmark__mark" aria-hidden="true">F/MC</span>
+        <span class="wordmark__text">Fuck My Cofounder</span>
+      </a>
+      <div class="header-status"><span aria-hidden="true"></span> public record / vibes jurisdiction</div>
+    </header>
+
+    <main id="main">
+      <section class="board board--page" id="town-board" aria-labelledby="board-title" data-board>
+        <div class="board__hero">
+          <p class="eyebrow">PUBLIC RECORD / VIBES JURISDICTION</p>
+          <h1 id="board-title">The Town Board</h1>
+          <p class="board__lede">Newest filings first. Open a card’s thread to corroborate anonymously. No names. No mercy. Your case number is your board key.</p>
+          <p class="board__status" data-board-status role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="board__locked" data-board-locked>
+          <p class="board__locked-stamp" aria-hidden="true">SEALED</p>
+          <p class="board__locked-copy">The board shows you the receipts after you file your own. Generate a case file, hit <strong>Share the evidence</strong>, and you land here. Already posted? Enter your board key (the <strong>CASE #FMC-…</strong> on your file).</p>
+          <a class="button button--red" href="/?report=1">File your report <span aria-hidden="true">→</span></a>
+          <form class="board__reclaim" data-board-reclaim>
+            <label class="board__reclaim-label" for="board-key">Already filed? Enter your board key</label>
+            <div class="board__reclaim-row">
+              <input id="board-key" class="board__reclaim-input" name="boardKey" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="FMC-ABC2345" maxlength="20" data-board-reclaim-input>
+              <button class="button button--outline" type="submit" data-board-reclaim-submit>Unseal</button>
+            </div>
+            <p class="board__reclaim-error" data-board-reclaim-error role="status" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="board__feed" data-board-feed hidden></div>
+        <div class="board__more">
+          <button class="button button--outline" type="button" data-board-more hidden>Load more filings</button>
+          <p class="board__end" data-board-end hidden>End of the public record. For now.</p>
+        </div>
+        <div data-board-sentinel aria-hidden="true"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>© <span data-year></span> FUCKMYCOFOUNDER.COM</p>
+      <a href="/">Back to the incident desk →</a>
+    </footer>
+
+    <noscript>
+      <div class="noscript">This public record requires JavaScript. Your cofounder has already disabled enough things.</div>
+    </noscript>
+  </body>
+</html>

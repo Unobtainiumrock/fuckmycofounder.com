@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f4eddf">
-    <meta name="description" content="Turn cofounder chaos into a shareable incident report. No account. No filter.">
+    <meta name="description" content="Turn cofounder chaos into a redacted, shareable incident report. No accounts. Optional mugshot. No names.">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Fuck My Cofounder — File an Incident Report">
     <meta property="og:description" content="Some startups need a pivot. Some need an incident report.">
@@ -12,9 +12,9 @@
     <meta property="og:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Fuck My Cofounder">
-    <meta name="twitter:description" content="File a cofounder incident report.">
+    <meta name="twitter:description" content="File a completely unofficial cofounder incident report.">
     <meta name="twitter:image" content="https://fuckmycofounder.com/assets/images/share-card.png">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Fuck My Cofounder — File an Incident Report</title>
     <link rel="canonical" href="https://fuckmycofounder.com/">
     <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml">
@@ -33,14 +33,14 @@
         <span class="wordmark__mark" aria-hidden="true">F/MC</span>
         <span class="wordmark__text">Fuck My Cofounder</span>
       </a>
+      <div class="header-status"><span aria-hidden="true"></span> definitely not legal advice</div>
     </header>
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow">A SAFE SPACE FOR UNSAFE SLACK THREADS</p>
         <h1 id="hero-title">Some startups need a pivot.<br><em>Some need an exorcism.</em></h1>
         <div class="hero__lower">
-          <p class="hero__lede">Convert founder chaos into a shareable incident report. No account. No upload. No filter.</p>
+          <p class="hero__lede">Convert founder chaos into a completely unofficial, aggressively redacted incident report. No account. Optional mugshot. No names.</p>
           <p class="hero__case" aria-hidden="true">CASE NO. <span data-case-ticker>000001</span><br>VIBES JURISDICTION</p>
         </div>
       </section>
@@ -52,49 +52,67 @@
         </div>
 
         <div class="mode-grid">
-          <article class="mode-card mode-card--spicy" aria-labelledby="spicy-title">
-            <div class="mode-card__meta">
-              <span>MODE 01</span>
-              <span class="classified">CLASSIFIED</span>
-            </div>
-            <div>
-              <h3 id="spicy-title">Spicy<br>Mode</h3>
-              <p>For when “disagreement” has become a line item in the cap table.</p>
-            </div>
-            <button class="button button--disabled" type="button" disabled>
-              Coming soon-ish <span aria-hidden="true">↗</span>
-            </button>
-          </article>
-
           <article class="mode-card mode-card--report" aria-labelledby="report-title">
             <div class="mode-card__meta">
-              <span>MODE 02</span>
-              <span>NO LOGIN / NO RECEIPTS UPLOADED</span>
+              <span>MODE 01</span>
+              <span>NO LOGIN / OPTIONAL MUGSHOT</span>
             </div>
             <div>
               <h3 id="report-title">File an<br>Incident Report</h3>
-              <p>Tell the whole story. Receive the board disposition you deserve.</p>
+              <p>Tell the story without telling on anyone. Receive the board disposition you deserve.</p>
             </div>
             <button class="button button--dark" type="button" data-start-report>
               Begin emotional paperwork <span aria-hidden="true">↗</span>
             </button>
+          </article>
+
+          <article class="mode-card mode-card--spicy" aria-labelledby="spicy-title">
+            <div class="mode-card__meta">
+              <span>MODE 02</span>
+              <span class="classified">CLASSIFIED</span>
+            </div>
+            <div>
+              <h3 id="spicy-title">Spicy<br>Mode</h3>
+              <p>For when the cap-table fight is really about who sits next to the ABG CMO at offsite.</p>
+            </div>
+            <button class="button button--disabled" type="button" disabled>
+              Coming soon-ish <span aria-hidden="true">↗</span>
+            </button>
+            <div class="mode-card__tape" aria-hidden="true">LAWYERS SAID “ABSOLUTELY NOT YET”</div>
           </article>
         </div>
       </section>
 
       <section class="process" aria-labelledby="process-title">
         <p class="eyebrow">THE THREE-STAGE GRIEF PIPELINE</p>
-        <h2 id="process-title">Vent. File. Release.</h2>
+        <h2 id="process-title">Vent. Redact. Release.</h2>
         <ol class="process__steps">
           <li><span>01</span><strong>Pick the charge</strong><small>Equity amnesia? Pivot addiction? Weaponized “quick sync”?</small></li>
-          <li><span>02</span><strong>Tell it straight</strong><small>The 6 a.m. all-hands, the vanished runway, the whole cap-table saga.</small></li>
-          <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a client-side-only link into the group chat.</small></li>
+          <li><span>02</span><strong>Remove the identifiers</strong><small>No names, handles, links, companies, or courtroom exhibits.</small></li>
+          <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a link with the mugshot attached.</small></li>
         </ol>
       </section>
 
-      <section class="manifesto" aria-label="Site promise">
-        <p>Your draft never leaves your browser. We literally built no place to send it.</p>
+      <section class="board-entry" aria-labelledby="board-entry-title" data-board-entry>
+        <div class="board-entry__copy">
+          <p class="eyebrow">PUBLIC RECORD / VIBES JURISDICTION</p>
+          <h2 id="board-entry-title">The Town Board</h2>
+          <p>Live filings live on their own page. Finish a report and share it to land there automatically — or come back with your board key.</p>
+          <p class="board-entry__returning" data-board-entry-returning hidden>You’re already on the docket. Jump back in.</p>
+        </div>
+        <div class="board-entry__actions">
+          <a class="button button--red" href="/board" data-board-entry-open>Visit the Town Board <span aria-hidden="true">→</span></a>
+          <form class="board-entry__reclaim" data-board-entry-reclaim>
+            <label class="board-entry__label" for="landing-board-key">Returning? Enter your board key</label>
+            <div class="board-entry__row">
+              <input id="landing-board-key" class="board-entry__input" name="boardKey" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="FMC-ABC2345" maxlength="20" data-board-entry-input>
+              <button class="button button--outline" type="submit" data-board-entry-submit>Unseal</button>
+            </div>
+            <p class="board-entry__error" data-board-entry-error role="status" aria-live="polite"></p>
+          </form>
+        </div>
       </section>
+
     </main>
 
     <footer class="site-footer">
@@ -120,7 +138,7 @@
         <form class="report-form" data-report-form novalidate>
           <section class="form-step is-active" data-step="1" aria-labelledby="step-one-title">
             <p class="form-kicker">SECTION A / NATURE OF THE NONSENSE</p>
-            <h3 id="step-one-title">What are we charging the vibes with?</h3>
+            <h3 id="step-one-title">What are you reporting?</h3>
             <fieldset class="charge-grid" data-charge-grid>
               <legend class="sr-only">Choose one cofounder offense</legend>
             </fieldset>
@@ -131,8 +149,22 @@
           </section>
 
           <section class="form-step" data-step="2" aria-labelledby="step-two-title" hidden>
-            <p class="form-kicker">SECTION B / THE LORE</p>
-            <h3 id="step-two-title">Give us your side of it.</h3>
+            <p class="form-kicker">SECTION B / THE HEAVILY REDACTED LORE</p>
+            <h3 id="step-two-title">Give us the board-safe version.</h3>
+            <div class="avatar-field" data-avatar-field>
+              <div class="avatar-field__header">
+                <span>Subject photo (optional)</span>
+                <button class="text-button" type="button" data-avatar-clear hidden>Remove</button>
+              </div>
+              <div class="avatar-field__body">
+                <label class="avatar-picker">
+                  <input type="file" data-avatar-input accept="image/jpeg,image/png,image/webp">
+                  <span>Add mugshot</span>
+                </label>
+                <img class="avatar-preview" data-avatar-preview alt="" hidden>
+              </div>
+              <p class="field-error" data-avatar-error role="alert"></p>
+            </div>
             <label class="field">
               <span>My cofounder…</span>
               <textarea name="incident" rows="3" maxlength="180" required placeholder="called a 6 a.m. all-hands to unveil the exact idea we rejected yesterday"></textarea>
@@ -151,6 +183,35 @@
               <small><span data-count="translation">0</span>/80</small>
               <span class="field-error" data-error="translation" role="alert"></span>
             </label>
+
+            <div class="case-preview" data-case-preview-wrap hidden>
+              <p class="form-kicker">LIVE CASE FILE PREVIEW</p>
+              <article class="case-file" data-case-preview aria-label="Live case file preview">
+                <div class="case-file__topline">
+                  <span>F/MC INCIDENT REPORT</span>
+                  <span data-report-id>CASE #000000</span>
+                </div>
+                <div class="case-file__meta">
+                  <div class="case-file__stamp" data-report-severity>SEVERITY: SERIES B</div>
+                  <figure class="case-file__subject" data-report-subject hidden>
+                    <img data-report-avatar alt="">
+                    <figcaption>SUBJECT</figcaption>
+                  </figure>
+                </div>
+                <dl>
+                  <div><dt>CHARGE</dt><dd data-report-charge></dd></div>
+                  <div><dt>STATEMENT</dt><dd data-report-incident></dd></div>
+                  <div><dt>THEIR DEFENSE</dt><dd data-report-quote></dd></div>
+                  <div><dt>ADULT TRANSLATION</dt><dd data-report-translation></dd></div>
+                </dl>
+                <footer>
+                  <span>BOARD DISPOSITION</span>
+                  <strong data-report-disposition></strong>
+                  <small>fuckmycofounder.com · satire, obviously</small>
+                </footer>
+              </article>
+            </div>
+
             <div class="form-actions">
               <button class="button button--outline" type="button" data-back="1">← Back</button>
               <button class="button button--red" type="submit">Generate case file ↗</button>
@@ -160,8 +221,8 @@
           <section class="form-step" data-step="3" aria-labelledby="step-three-title" hidden>
             <div class="result-heading">
               <div>
-                <p class="form-kicker">SECTION C / FINDINGS</p>
-                <h3 id="step-three-title">The board has reviewed the vibes.</h3>
+                <p class="form-kicker">SECTION C / OFFICIAL-ISH FINDINGS</p>
+                <h3 id="step-three-title">The board has seen enough.</h3>
               </div>
               <button class="text-button" type="button" data-start-over>Start over</button>
             </div>
@@ -171,7 +232,13 @@
                 <span>F/MC INCIDENT REPORT</span>
                 <span data-report-id>CASE #000000</span>
               </div>
-              <div class="case-file__stamp" data-report-severity>SEVERITY: SERIES B</div>
+              <div class="case-file__meta">
+                <div class="case-file__stamp" data-report-severity>SEVERITY: SERIES B</div>
+                <figure class="case-file__subject" data-report-subject hidden>
+                  <img data-report-avatar alt="">
+                  <figcaption>SUBJECT</figcaption>
+                </figure>
+              </div>
               <dl>
                 <div><dt>CHARGE</dt><dd data-report-charge></dd></div>
                 <div><dt>STATEMENT</dt><dd data-report-incident></dd></div>
@@ -181,15 +248,16 @@
               <footer>
                 <span>BOARD DISPOSITION</span>
                 <strong data-report-disposition></strong>
-                <small>fuckmycofounder.com</small>
+                <small>fuckmycofounder.com · satire, obviously</small>
               </footer>
             </article>
 
             <div class="share-actions">
-              <button class="button button--red" type="button" data-share-report>Share the evidence</button>
+              <button class="button button--red" type="button" data-share-report>Share the evidence*</button>
               <button class="button button--outline" type="button" data-download-report>Download card</button>
               <button class="button button--outline" type="button" data-copy-link>Copy private-ish link</button>
             </div>
+            <p class="share-note">*Sharing posts your case to the Town Board and takes you there. Your <strong>CASE #</strong> is the board key for later visits. Still no names, still satire.</p>
             <div class="toast" data-toast role="status" aria-live="polite"></div>
           </section>
         </form>

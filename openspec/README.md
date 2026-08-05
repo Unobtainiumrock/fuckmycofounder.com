@@ -28,14 +28,18 @@ pnpm lint
 pnpm check:architecture
 pnpm check:unused
 pnpm typecheck
-pnpm build
-pnpm test
+pnpm build:app
+pnpm test:all
 pnpm test:integration
 pnpm test:e2e
 pnpm check:file-sizes
 pnpm openspec:validate
 pnpm test:container
 ```
+
+The unqualified `pnpm build` and `pnpm test` commands remain the existing
+Cloudflare static build and test entrypoints until that production path is
+retired through a separately authorized cutover.
 
 CI must install from the frozen lockfile, preserve upstream pipeline failures,
 and fail if build/generation changes tracked files. A skipped command is a named

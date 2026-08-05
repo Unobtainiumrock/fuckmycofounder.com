@@ -1,7 +1,7 @@
 # Foundation verification record
 
-Status: repository implementation complete for
-`establish-application-engineering-foundation` on 2026-08-05.
+Status: the repository foundation was verified on 2026-08-05. Reconciliation
+with later static-production work reopened acquisition parity and final review.
 
 ## Pinned toolchain
 
@@ -48,8 +48,9 @@ migration was introduced.
 
 ## Explicitly deferred evidence
 
-No production database, authentication, email, object storage, scanning, CDN,
-hosting, queue, analytics, DNS, or secret provider has been selected or mutated.
-There is no preview deployment, live migration, crawler-unfurl, or provider
-acceptance evidence. Those decisions and live checks belong to later owning
-changes and require separate authority.
+The foundation work selected or mutated no production database, authentication,
+email, object storage, scanning, CDN, hosting, queue, analytics, DNS, or secret
+provider. Current `main` independently contains a Cloudflare static deployment
+with Pages Functions, KV, R2, and D1; this record supplies no provider read-back,
+preview, live migration, crawler-unfurl, or acceptance evidence for that system.
+Those external checks require separate authority.

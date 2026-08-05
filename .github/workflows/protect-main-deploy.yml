@@ -1,0 +1,25 @@
+# Belt-and-suspenders: flag unexpected production pushes.
+# Branch protection is the real gate; this creates an audit trail if rules are bypassed.
+name: Production push audit
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production pusher
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: Unobtainiumrock
+        run: |
+          if [ "$ACTOR" != "$OWNER" ]; then
+            echo "::error::Unexpected direct push to main by $ACTOR. Branch protection should block this."
+            exit 1
+          fi
+          echo "Production push authorized for $ACTOR"

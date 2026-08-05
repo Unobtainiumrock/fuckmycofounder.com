@@ -24,7 +24,10 @@ tooling decision.
   enforcement, Knip for unused exports, and a repository-owned size check.
 
 Exact package versions are locked in `pnpm-lock.yaml`. Upgrade versions
-deliberately and keep the stable root command interface unchanged.
+deliberately and keep the stable command interface unchanged. The existing
+Cloudflare static production workflow retains `build` and `test`; the Next
+foundation uses `build:app` and the combined `test:all` gate until an authorized
+cutover removes that compatibility seam.
 
 ## Layout and dependency direction
 
@@ -54,11 +57,14 @@ clients or module-internal policy files.
 - Public documents render complete first-response HTML and metadata.
 - Private database/configuration code is marked `server-only`; named authorized
   projections are the actual privacy boundary.
-- No application cache, Edge runtime, worker, queue, microservice, monorepo
-  package, generic repository, provider SDK, or shared UI library exists in
-  Order 0.
+- The Next foundation adds no application cache, Edge runtime, worker, queue,
+  microservice, monorepo package, generic repository, provider SDK, or shared UI
+  library in Order 0.
 - Media providers, authentication, email, storage, scanning, and hosting remain
   decisions of their owning changes.
+- Existing Cloudflare Pages Functions, KV, R2, and D1 behavior on the static
+  Caseboard/Town Board surface predates this foundation and remains outside its
+  provider acceptance evidence.
 - The build emits one portable standalone Node container with distinct liveness
   and readiness routes, Next.js request-draining termination, and immutable
   build identity. The container gate proves its SIGTERM path is bounded and is

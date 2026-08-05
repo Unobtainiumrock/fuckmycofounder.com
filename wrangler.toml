@@ -1,0 +1,30 @@
+# Cloudflare Pages + Functions local dev and binding reference.
+# Create resources in the dashboard, then paste IDs below:
+#   KV: Workers & Pages → KV → Create → FMC_CASES
+#   R2: R2 → Create bucket → fmc-cases
+#   D1: Workers & Pages → D1 → Create → fmc-threads
+# Bind under Pages → fuckmycofounder → Settings → Functions.
+# Apply SQL with: npx wrangler d1 migrations apply fmc-threads --remote
+
+name = "fuckmycofounder"
+compatibility_date = "2024-09-01"
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "FMC_CASES"
+id = "f78cfdb2ee8f4e1ba6840926b4a673ad"
+
+[[r2_buckets]]
+binding = "FMC_R2"
+bucket_name = "fmc-cases"
+
+[[d1_databases]]
+binding = "FMC_DB"
+database_name = "fmc-threads"
+database_id = "e84cdd0d-d026-415a-9ae8-a261f25f3117"
+migrations_dir = "migrations"
+
+[vars]
+MEDIA_BASE_URL = "https://fuckmycofounder.com/api"
+CASE_RATE_LIMIT = "5"
+COMMENT_RATE_LIMIT = "20"
