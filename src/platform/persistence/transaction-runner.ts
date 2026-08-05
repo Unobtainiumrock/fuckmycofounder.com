@@ -1,10 +1,20 @@
+import "server-only";
+
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { QueryResult } from "pg";
+export type DatabaseRow = Record<string, unknown>;
+
+export interface DatabaseQueryResult<Row extends DatabaseRow> {
+  readonly rowCount: number | null;
+  readonly rows: readonly Row[];
+}
 
 export interface DatabaseClient {
-  query(text: string, values?: readonly unknown[]): Promise<QueryResult>;
-  release(): void;
+  query<Row extends DatabaseRow>(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<DatabaseQueryResult<Row>>;
+  release(destroy?: boolean): void;
 }
 
 export interface DatabasePool {
@@ -13,7 +23,10 @@ export interface DatabasePool {
 
 export interface TransactionContext {
   readonly correlationId: string;
-  query(text: string, values?: readonly unknown[]): Promise<QueryResult>;
+  query<Row extends DatabaseRow>(
+    text: string,
+    values?: readonly unknown[],
+  ): Promise<DatabaseQueryResult<Row>>;
 }
 
 type DatabaseFailureCode =
@@ -29,9 +42,8 @@ export class DatabaseOperationError extends Error {
     code: DatabaseFailureCode,
     correlationId: string,
     message: string,
-    cause?: unknown,
   ) {
-    super(message, { cause });
+    super(message);
     this.name = "DatabaseOperationError";
     this.code = code;
     this.correlationId = correlationId;
@@ -63,14 +75,15 @@ export function createTransactionRunner(pool: DatabasePool): TransactionRunner {
 
       let client: DatabaseClient;
 
+      let destroyClient = false;
+
       try {
         client = await pool.connect();
-      } catch (cause) {
+      } catch {
         throw new DatabaseOperationError(
           "database_connection_failed",
           correlationId,
           "Database connection failed",
-          cause,
         );
       }
 
@@ -81,15 +94,21 @@ export function createTransactionRunner(pool: DatabasePool): TransactionRunner {
         const result = await transactionScope.run(true, () =>
           operation({
             correlationId,
-            query: (text: string, values?: readonly unknown[]) =>
-              client.query(text, values),
+            query: <Row extends DatabaseRow>(
+              text: string,
+              values?: readonly unknown[],
+            ) => client.query<Row>(text, values),
           }),
         );
 
         await client.query("commit");
         return result;
       } catch (cause) {
-        await client.query("rollback").catch(() => undefined);
+        try {
+          await client.query("rollback");
+        } catch {
+          destroyClient = true;
+        }
 
         if (cause instanceof DatabaseOperationError) {
           throw cause;
@@ -99,10 +118,9 @@ export function createTransactionRunner(pool: DatabasePool): TransactionRunner {
           "database_operation_failed",
           correlationId,
           "Database operation failed",
-          cause,
         );
       } finally {
-        client.release();
+        client.release(destroyClient);
       }
     },
   };

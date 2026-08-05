@@ -5,16 +5,23 @@ import {
   createTransactionRunner,
   type DatabaseClient,
   type DatabasePool,
+  type DatabaseQueryResult,
+  type DatabaseRow,
 } from "@/src/platform/persistence/transaction-runner";
 
 function createPool() {
-  const query = vi.fn<DatabaseClient["query"]>().mockResolvedValue({
-    command: "",
-    fields: [],
-    oid: 0,
-    rowCount: null,
-    rows: [],
-  });
+  const queryMock = vi
+    .fn<
+      (
+        text: string,
+        values?: readonly unknown[],
+      ) => Promise<DatabaseQueryResult<DatabaseRow>>
+    >()
+    .mockResolvedValue({ rowCount: null, rows: [] });
+  const query: DatabaseClient["query"] = <Row extends DatabaseRow>(
+    text: string,
+    values?: readonly unknown[],
+  ) => queryMock(text, values) as Promise<DatabaseQueryResult<Row>>;
   const release = vi.fn();
   const client = { query, release } satisfies DatabaseClient;
   const connect = vi.fn().mockResolvedValue(client);
@@ -23,7 +30,7 @@ function createPool() {
     client,
     connect,
     pool: { connect } satisfies DatabasePool,
-    query,
+    query: queryMock,
     release,
   };
 }
@@ -49,6 +56,7 @@ describe("transaction runner", () => {
       "commit",
     ]);
     expect(fixture.release).toHaveBeenCalledOnce();
+    expect(fixture.release).toHaveBeenCalledWith(false);
   });
 
   it("rolls back and releases after an operation failure", async () => {
@@ -71,6 +79,29 @@ describe("transaction runner", () => {
       "rollback",
     ]);
     expect(fixture.release).toHaveBeenCalledOnce();
+    expect(fixture.release).toHaveBeenCalledWith(false);
+  });
+
+  it("destroys a client whose rollback fails", async () => {
+    const fixture = createPool();
+    fixture.query.mockImplementation((sql) => {
+      if (sql === "rollback") {
+        return Promise.reject(new Error("connection lost"));
+      }
+      return Promise.resolve({
+        rowCount: null,
+        rows: [],
+      });
+    });
+    const runner = createTransactionRunner(fixture.pool);
+
+    await expect(
+      runner.run("request-tainted", () => {
+        throw new Error("operation failed");
+      }),
+    ).rejects.toMatchObject({ code: "database_operation_failed" });
+
+    expect(fixture.release).toHaveBeenCalledWith(true);
   });
 
   it("denies nested transaction ownership", async () => {
@@ -100,6 +131,7 @@ describe("transaction runner", () => {
       correlationId: "request-connect",
       message: "Database connection failed",
     });
+    expect((failure as Error).cause).toBeUndefined();
     expect(JSON.stringify(failure)).not.toContain("hunter2");
   });
 });

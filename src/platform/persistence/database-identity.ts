@@ -1,9 +1,12 @@
+import "server-only";
+
 const disposableHosts = new Set(["127.0.0.1", "localhost", "::1"]);
 
 export type AppEnvironment = "local" | "test" | "preview" | "production";
 
 interface DatabaseIdentity {
   readonly database: string;
+  readonly hasConnectionOverrides: boolean;
   readonly host: string;
   readonly username: string;
 }
@@ -23,6 +26,7 @@ function readIdentity(databaseUrl: string): DatabaseIdentity {
 
   return {
     database: decodeURIComponent(parsed.pathname.slice(1)),
+    hasConnectionOverrides: parsed.search !== "",
     host: parsed.hostname,
     username: decodeURIComponent(parsed.username),
   };
@@ -35,6 +39,7 @@ export function assertDisposableDatabaseUrl(
   const identity = readIdentity(databaseUrl);
   const disposable =
     appEnvironment !== "production" &&
+    !identity.hasConnectionOverrides &&
     disposableHosts.has(identity.host) &&
     identity.database.endsWith("_test") &&
     identity.username.endsWith("_test");
@@ -51,6 +56,25 @@ export function assertApplicationDatabaseIdentity(
   appEnvironment: AppEnvironment,
 ): DatabaseIdentity {
   const identity = readIdentity(databaseUrl);
+
+  if (identity.hasConnectionOverrides) {
+    throw new Error(
+      appEnvironment === "production"
+        ? "Production database guard rejected the database identity"
+        : "Non-production database guard rejected the database identity",
+    );
+  }
+
+  if (
+    (appEnvironment === "local" || appEnvironment === "test") &&
+    (!disposableHosts.has(identity.host) ||
+      !identity.database.endsWith("_test") ||
+      !identity.username.endsWith("_test"))
+  ) {
+    throw new Error(
+      "Non-production database guard rejected the database identity",
+    );
+  }
 
   if (
     appEnvironment === "production" &&

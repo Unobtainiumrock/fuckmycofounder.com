@@ -43,6 +43,7 @@ describe("canonical quality tooling", () => {
       "test:e2e",
       "check:architecture",
       "check:file-sizes",
+      "check:unused",
       "openspec:validate",
     ];
 
@@ -55,5 +56,18 @@ describe("canonical quality tooling", () => {
         /\|\|\s*true|;\s*true/u,
       );
     }
+  });
+
+  it("fails the Postgres gate when its disposable URL is missing", async () => {
+    const environment = { ...process.env };
+    delete environment.DATABASE_TEST_URL;
+
+    const failure = await execFileAsync(
+      process.execPath,
+      ["scripts/test/run-postgres.ts"],
+      { env: environment },
+    ).catch((error: unknown) => error as { stderr: string });
+
+    expect(failure.stderr).toContain("Postgres integration gate cannot skip");
   });
 });

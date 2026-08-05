@@ -32,4 +32,22 @@ describe("runtime version contract", () => {
     expect(tsconfig.compilerOptions?.noUncheckedIndexedAccess).toBe(true);
     expect(tsconfig.compilerOptions?.exactOptionalPropertyTypes).toBe(true);
   });
+
+  it("bakes build identity into the runner image and proves the reported value", async () => {
+    const [dockerfile, smokeTest] = await Promise.all([
+      readFile("Dockerfile", "utf8"),
+      readFile("scripts/test/container-smoke.sh", "utf8"),
+    ]);
+
+    expect(dockerfile).toContain(
+      "printf 'export const artifactBuildId = \"%s\";\\n'",
+    );
+    expect(dockerfile).not.toMatch(
+      /FROM node:24\.18\.0-alpine AS runner[\s\S]*ENV BUILD_ID=/u,
+    );
+    expect(dockerfile).toContain('CMD ["node", "start-standalone.mts"]');
+    expect(smokeTest).toContain("--build-arg BUILD_ID=container-ci");
+    expect(smokeTest).toContain("--env BUILD_ID=runtime-override");
+    expect(smokeTest).toContain("x-build-id: container-ci");
+  });
 });

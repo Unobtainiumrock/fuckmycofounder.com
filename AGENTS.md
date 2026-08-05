@@ -47,6 +47,11 @@ choosing product behavior.
 - Public, viewer, staff, and restricted projections are separate named types.
 - Durable commands authorize first and own one Postgres transaction. Routes do
   not issue SQL or assemble partial transactions.
+- Server Functions live only in `*.action.ts` or `*.action.tsx` files; inline
+  and convention-free `"use server"` entrypoints are rejected by the graph
+  gate so their imports receive the same scrutiny as Route Handlers.
+- Every `"use client"` module lives under `app/_client/`, where the graph gate
+  prohibits imports from server platform implementations.
 
 ## Required proof
 

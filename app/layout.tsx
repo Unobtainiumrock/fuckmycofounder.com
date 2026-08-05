@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import "@/assets/css/reset.css";
 import "@/assets/css/tokens.css";
@@ -29,6 +29,7 @@ export const metadata: Metadata = {
     images: ["/assets/images/share-card.png"],
   },
   icons: { icon: "/assets/icons/favicon.svg" },
+  robots: { follow: true, index: true },
 };
 
 export const viewport: Viewport = {
@@ -39,7 +40,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: ReactNode }>) {
+}: Readonly<{ children: ReactNode }>): ReactElement {
   return (
     <html lang="en">
       <body>{children}</body>

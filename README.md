@@ -1,18 +1,30 @@
 # fuckmycofounder.com
 
-A dependency-free static site where founders share cofounder horror stories as incident reports.
+The founder-network product begins with the Caseboard landing experience and
+Cooked Quiz, served by the same Next.js application that will own later
+Profiles, Reviews, Posts, Feed, messaging, and trust features.
 
-## Local preview
+## Local development
+
+Use Node 24.18.0 and Corepack, then install and run the app:
 
 ```bash
-python3 -m http.server 4173
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-Open `http://127.0.0.1:4173`. The site has no build step, backend, cookies, analytics, external fonts, or network calls. Share payloads live only in the URL fragment.
+Open `http://127.0.0.1:3000`. Local startup has no database dependency unless
+`REQUIRE_DATABASE=true` and an explicit safe `DATABASE_URL` are supplied.
 
-## Structure
+## Repository map
 
-- `index.html` — semantic page shell and report dialog
-- `assets/css/` — reset, tokens, shared components, and page layout
-- `assets/js/modules/` — copy, validation, report generation, card rendering, sharing, and UI flow
-- `assets/images/` and `assets/icons/` — social preview and favicon
+- `app/` — Next.js composition, pages, metadata, and Route Handlers
+- `src/modules/` — framework-neutral domain/application modules
+- `src/platform/` — server-only runtime adapters and policy enforcement
+- `src/shared/` — small primitives with demonstrated cross-module reuse
+- `tests/` — unit, contract, Postgres, production HTTP, and browser proof
+- `openspec/` — accepted product and engineering change contracts
+
+Read `AGENTS.md` before implementation. The full reproducible gate and its
+disposable Postgres prerequisite are documented in `openspec/README.md`.

@@ -1,3 +1,5 @@
+import "server-only";
+
 const migrationName = /^(?<order>\d{13})_[a-z0-9][a-z0-9_-]*\.mjs$/u;
 
 export function assertMigrationManifest(

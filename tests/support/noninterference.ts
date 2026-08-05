@@ -45,11 +45,17 @@ function inspect(
     return;
   }
 
-  for (const [key, entry] of Object.entries(value)) {
-    const entryPath = `${path}.${key}`;
-    if (policy.forbiddenKeys.includes(key)) {
-      leaks.push({ kind: "forbidden-key", path: entryPath, value: key });
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (key === "stack") continue;
+    const descriptor = descriptors[key as keyof typeof descriptors];
+    const keyLabel = typeof key === "symbol" ? key.toString() : key;
+    const entryPath = `${path}.${keyLabel}`;
+    if (policy.forbiddenKeys.includes(keyLabel)) {
+      leaks.push({ kind: "forbidden-key", path: entryPath, value: keyLabel });
     }
+    if (!descriptor || !("value" in descriptor)) continue;
+    const entry = descriptor.value as unknown;
     inspect(entry, entryPath, policy, leaks, visited);
   }
 }

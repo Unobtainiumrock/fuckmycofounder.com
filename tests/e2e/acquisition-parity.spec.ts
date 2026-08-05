@@ -59,6 +59,21 @@ test.describe("mobile acquisition journey", () => {
     );
     await page.getByRole("button", { name: "Begin emotional paperwork" }).tap();
     await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByLabel("Weaponized ‘Quick Sync’").check();
+    await page.getByRole("button", { name: "Continue" }).tap();
+    await page.getByLabel("My cofounder…").fill("missed the launch review");
+    await page
+      .getByLabel("When asked about it, they said…")
+      .fill("calendars are a social construct");
+    await page
+      .getByLabel("Sane adults might call this…")
+      .fill("calendar warfare");
+    await page.getByRole("button", { name: "Generate case file ↗" }).tap();
+    await expect(
+      page.getByRole("article", {
+        name: "Generated cofounder incident report",
+      }),
+    ).toBeVisible();
   });
 });
 
@@ -73,6 +88,10 @@ test("supports keyboard dialog control and reduced motion", async ({
     .press("Enter");
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
+  const animationDuration = await dialog.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).animationDuration),
+  );
+  expect(animationDuration).toBeLessThanOrEqual(0.001);
   await expect(
     page.getByRole("button", { name: "Close report" }),
   ).toBeFocused();

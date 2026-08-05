@@ -2,6 +2,9 @@ import "server-only";
 
 import { z } from "zod";
 
+import { assertApplicationDatabaseIdentity } from "../persistence/database-identity";
+import { artifactBuildId } from "./artifact-build-id";
+
 const buildIdPattern = /^[A-Za-z0-9._-]+$/u;
 
 const environmentSchema = z.object({
@@ -11,6 +14,7 @@ const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).optional(),
   REQUIRE_DATABASE: z.enum(["true", "false"]).optional(),
 });
+type EnvironmentConfig = z.infer<typeof environmentSchema>;
 
 interface ApplicationConfig {
   readonly appEnvironment: "local" | "test" | "preview" | "production";
@@ -21,6 +25,60 @@ interface ApplicationConfig {
 
 let processApplicationConfig: ApplicationConfig | undefined;
 
+function parseEnvironment(
+  environment: Readonly<Record<string, string | undefined>>,
+): EnvironmentConfig {
+  const parsed = environmentSchema.safeParse(environment);
+
+  if (!parsed.success) {
+    throw new Error("Application configuration is invalid");
+  }
+
+  return parsed.data;
+}
+
+function assertRequiredConfiguration(
+  environment: EnvironmentConfig,
+  appEnvironment: ApplicationConfig["appEnvironment"],
+  buildId: string,
+  databaseRequired: boolean,
+): void {
+  const invalidProduction =
+    appEnvironment === "production" &&
+    (environment.NODE_ENV !== "production" ||
+      buildId === "local" ||
+      buildId === "development" ||
+      !databaseRequired ||
+      !environment.DATABASE_URL);
+
+  if (invalidProduction || (databaseRequired && !environment.DATABASE_URL)) {
+    throw new Error("Application configuration is invalid");
+  }
+}
+
+function assertDatabaseConfiguration(
+  databaseUrl: string | undefined,
+  appEnvironment: ApplicationConfig["appEnvironment"],
+): void {
+  if (!databaseUrl) {
+    return;
+  }
+
+  try {
+    assertApplicationDatabaseIdentity(databaseUrl, appEnvironment);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message ===
+        "Production database guard rejected the database identity"
+    ) {
+      throw error;
+    }
+
+    throw new Error("Application configuration is invalid");
+  }
+}
+
 export function readApplicationConfig(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): ApplicationConfig {
@@ -28,33 +86,29 @@ export function readApplicationConfig(
     return processApplicationConfig;
   }
 
-  const parsed = environmentSchema.safeParse(environment);
+  const processEnvironment = environment === process.env;
+  const parsed = parseEnvironment(
+    processEnvironment ? { ...environment, BUILD_ID: undefined } : environment,
+  );
+  const appEnvironment = parsed.APP_ENV ?? "local";
+  const buildId = processEnvironment
+    ? artifactBuildId
+    : (parsed.BUILD_ID ?? "development");
+  const databaseRequired = parsed.REQUIRE_DATABASE === "true";
 
-  if (!parsed.success) {
-    throw new Error("Application configuration is invalid");
-  }
-
-  const appEnvironment = parsed.data.APP_ENV ?? "local";
-  const buildId = parsed.data.BUILD_ID ?? "development";
-  const databaseRequired = parsed.data.REQUIRE_DATABASE === "true";
-
-  if (
-    appEnvironment === "production" &&
-    (parsed.data.NODE_ENV !== "production" ||
-      !parsed.data.BUILD_ID ||
-      !databaseRequired ||
-      !parsed.data.DATABASE_URL)
-  ) {
-    throw new Error("Application configuration is invalid");
-  }
+  assertRequiredConfiguration(
+    parsed,
+    appEnvironment,
+    buildId,
+    databaseRequired,
+  );
+  assertDatabaseConfiguration(parsed.DATABASE_URL, appEnvironment);
 
   const application = {
     appEnvironment,
     buildId,
     databaseRequired,
-    ...(parsed.data.DATABASE_URL
-      ? { databaseUrl: parsed.data.DATABASE_URL }
-      : {}),
+    ...(parsed.DATABASE_URL ? { databaseUrl: parsed.DATABASE_URL } : {}),
   } satisfies ApplicationConfig;
 
   if (environment === process.env) {

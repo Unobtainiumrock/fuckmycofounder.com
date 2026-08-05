@@ -25,6 +25,7 @@ describe.runIf(baseUrl)("production acquisition document", () => {
       'rel="canonical" href="https://fuckmycofounder.com"',
     );
     expect(html).toContain('property="og:image"');
+    expect(html).toContain('name="robots" content="index, follow"');
     expect(html).toContain("/assets/images/share-card.png");
   });
 
@@ -43,5 +44,14 @@ describe.runIf(baseUrl)("production acquisition document", () => {
     for (const response of responses) {
       expect(response.status).toBe(200);
     }
+  });
+
+  it("applies the restrictive document policy to not-found pages", async () => {
+    const response = await fetch(new URL("/does-not-exist", baseUrl));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-security-policy")).toContain(
+      "default-src 'self'",
+    );
   });
 });

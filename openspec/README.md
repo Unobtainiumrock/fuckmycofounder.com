@@ -17,12 +17,16 @@ Archiving is a human sign-off action and is never automatic.
 
 ## Canonical repository gate
 
-Run these non-mutating commands from the repository root:
+Start an explicitly disposable local Postgres database whose database name and
+user both end in `_test`, then export its URL as `DATABASE_TEST_URL`. The
+Postgres gate fails rather than skips when this variable is missing or unsafe.
+Run these repository commands from the root:
 
 ```text
 pnpm format:check
 pnpm lint
 pnpm check:architecture
+pnpm check:unused
 pnpm typecheck
 pnpm build
 pnpm test
@@ -30,6 +34,7 @@ pnpm test:integration
 pnpm test:e2e
 pnpm check:file-sizes
 pnpm openspec:validate
+pnpm test:container
 ```
 
 CI must install from the frozen lockfile, preserve upstream pipeline failures,

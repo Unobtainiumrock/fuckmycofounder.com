@@ -2,7 +2,10 @@ import { cp, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 export const standaloneRoot = path.resolve(".next/standalone");
-export const standaloneServer = path.join(standaloneRoot, "server.js");
+export const standaloneServer = path.join(
+  standaloneRoot,
+  "start-standalone.mts",
+);
 
 export async function prepareStandalone(): Promise<void> {
   await mkdir(path.join(standaloneRoot, ".next"), { recursive: true });
@@ -11,5 +14,9 @@ export async function prepareStandalone(): Promise<void> {
     cp(".next/static", path.join(standaloneRoot, ".next/static"), {
       recursive: true,
     }),
+    cp(
+      "scripts/runtime/start-standalone.mts",
+      path.join(standaloneRoot, "start-standalone.mts"),
+    ),
   ]);
 }

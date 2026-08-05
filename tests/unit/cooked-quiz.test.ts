@@ -61,6 +61,26 @@ describe("Cooked Quiz module", () => {
     });
   });
 
+  it("enforces every UI length limit at the module boundary", () => {
+    const quiz = createCookedQuiz({ clock: fixedClock });
+
+    expect(
+      quiz.submit({
+        ...payload,
+        incident: "x".repeat(181),
+        quote: "y".repeat(141),
+        translation: "z".repeat(81),
+      }),
+    ).toEqual({
+      status: "rejected",
+      errors: {
+        incident: "Keep this blank to 180 characters or fewer.",
+        quote: "Keep this blank to 140 characters or fewer.",
+        translation: "Keep this blank to 80 characters or fewer.",
+      },
+    });
+  });
+
   it("derives the case ticker from the injected clock", () => {
     const quiz = createCookedQuiz({ clock: fixedClock });
 

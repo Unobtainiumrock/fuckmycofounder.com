@@ -16,17 +16,30 @@ describe("database configuration", () => {
   it("requires an explicit URL when the dependency is required", () => {
     expect(() =>
       readDatabaseSettings({ APP_ENV: "preview", REQUIRE_DATABASE: "true" }),
-    ).toThrow("Database configuration is invalid");
+    ).toThrow("Application configuration is invalid");
   });
 
   it("rejects a disposable database identity in production", () => {
     expect(() =>
       readDatabaseSettings({
         APP_ENV: "production",
+        BUILD_ID: "production-build",
         DATABASE_URL: "postgres://fmcf_test:secret@localhost:5432/fmcf_test",
+        NODE_ENV: "production",
         REQUIRE_DATABASE: "true",
       }),
     ).toThrow("Production database guard rejected the database identity");
+  });
+
+  it("rejects a remote database target from a test environment", () => {
+    expect(() =>
+      readDatabaseSettings({
+        APP_ENV: "test",
+        DATABASE_URL:
+          "postgres://production:secret@db.production.example:5432/application",
+        REQUIRE_DATABASE: "true",
+      }),
+    ).toThrow("Application configuration is invalid");
   });
 
   it("does not leak credentials through parse failures", () => {

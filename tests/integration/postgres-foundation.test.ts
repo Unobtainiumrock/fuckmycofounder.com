@@ -1,48 +1,53 @@
 import path from "node:path";
 
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { runMigrations } from "@/src/platform/persistence/migrations";
+import { assertDisposableDatabaseUrl } from "@/src/platform/persistence/database-identity";
 import {
-  createTransactionRunner,
-  type DatabaseClient,
-  type DatabasePool,
-} from "@/src/platform/persistence/transaction-runner";
+  closeDatabase,
+  databaseTransactionRunner,
+} from "@/src/platform/persistence/postgres";
 
 const databaseUrl = process.env.DATABASE_TEST_URL;
 const fixtureDirectory = path.resolve("tests/fixtures/postgres/migrations");
 
-function wrapClient(client: PoolClient): DatabaseClient {
-  return {
-    query: (text, values) => client.query(text, values ? [...values] : []),
-    release: () => client.release(),
-  };
+if (!databaseUrl) {
+  throw new Error(
+    "DATABASE_TEST_URL is required; the Postgres integration gate cannot skip",
+  );
 }
 
-describe.runIf(databaseUrl).sequential("disposable Postgres foundation", () => {
+assertDisposableDatabaseUrl(databaseUrl, "test");
+
+describe.sequential("disposable Postgres foundation", () => {
   const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-  const transactionPool: DatabasePool = {
-    connect: async () => wrapClient(await pool.connect()),
-  };
+  const transactionRunner = () =>
+    databaseTransactionRunner({
+      appEnvironment: "test",
+      databaseUrl,
+      required: true,
+    });
 
   beforeEach(async () => {
     await pool.query("drop schema public cascade; create schema public");
   });
 
   afterAll(async () => {
+    await closeDatabase();
     await pool.end();
   });
 
   it("applies from empty and repeats without rerunning migrations", async () => {
     const first = await runMigrations({
       appEnvironment: "test",
-      databaseUrl: databaseUrl!,
+      databaseUrl,
       directory: fixtureDirectory,
     });
     const repeat = await runMigrations({
       appEnvironment: "test",
-      databaseUrl: databaseUrl!,
+      databaseUrl,
       directory: fixtureDirectory,
     });
 
@@ -54,7 +59,7 @@ describe.runIf(databaseUrl).sequential("disposable Postgres foundation", () => {
     await runMigrations({
       appEnvironment: "test",
       count: 1,
-      databaseUrl: databaseUrl!,
+      databaseUrl,
       directory: fixtureDirectory,
     });
     const before = await pool.query(
@@ -63,7 +68,7 @@ describe.runIf(databaseUrl).sequential("disposable Postgres foundation", () => {
 
     await runMigrations({
       appEnvironment: "test",
-      databaseUrl: databaseUrl!,
+      databaseUrl,
       directory: fixtureDirectory,
     });
     const after = await pool.query(
@@ -77,10 +82,10 @@ describe.runIf(databaseUrl).sequential("disposable Postgres foundation", () => {
   it("rolls back the domain write when its required audit write fails", async () => {
     await runMigrations({
       appEnvironment: "test",
-      databaseUrl: databaseUrl!,
+      databaseUrl,
       directory: fixtureDirectory,
     });
-    const runner = createTransactionRunner(transactionPool);
+    const runner = transactionRunner();
 
     await expect(
       runner.run("audit-failure", async (transaction) => {
@@ -104,17 +109,17 @@ describe.runIf(databaseUrl).sequential("disposable Postgres foundation", () => {
   it("preserves a concurrent revision invariant and one matching audit", async () => {
     await runMigrations({
       appEnvironment: "test",
-      databaseUrl: databaseUrl!,
+      databaseUrl,
       directory: fixtureDirectory,
     });
     await pool.query(
       "insert into foundation_subjects (id, state) values ('subject-race', 'active')",
     );
-    const runner = createTransactionRunner(transactionPool);
+    const runner = transactionRunner();
 
     const attempt = (correlationId: string) =>
       runner.run(correlationId, async (transaction) => {
-        const update = await transaction.query(
+        const update = await transaction.query<{ revision: string }>(
           "update foundation_subjects set revision = revision + 1 where id = $1 and revision = 0 returning revision",
           ["subject-race"],
         );

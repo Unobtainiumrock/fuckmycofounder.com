@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { runMigrations } from "../../src/platform/persistence/migrations";
+import { runMigrations } from "../../src/platform/persistence/migrations.ts";
 
 const databaseUrl = process.env.DATABASE_TEST_URL;
 

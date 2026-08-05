@@ -19,6 +19,10 @@ describe("database identity guards", () => {
     ["postgres://postgres:secret@127.0.0.1:5432/postgres", "test"],
     ["postgres://fmcf_test:secret@db.example.com:5432/fmcf_test", "test"],
     ["postgres://fmcf_test:secret@127.0.0.1:5432/fmcf_test", "production"],
+    [
+      "postgres://fmcf_test:secret@localhost:5432/fmcf_test?host=db.production.example&user=prod",
+      "test",
+    ],
   ] as const)(
     "rejects a non-disposable identity",
     (databaseUrl, appEnvironment) => {
@@ -32,6 +36,24 @@ describe("database identity guards", () => {
     expect(() =>
       assertApplicationDatabaseIdentity(
         "postgres://fmcf_test:secret@db.example.com:5432/fmcf_test",
+        "production",
+      ),
+    ).toThrow("Production database guard rejected the database identity");
+  });
+
+  it("rejects remote database identities for local and test commands", () => {
+    expect(() =>
+      assertApplicationDatabaseIdentity(
+        "postgres://production:secret@db.production.example:5432/application",
+        "test",
+      ),
+    ).toThrow("Non-production database guard rejected the database identity");
+  });
+
+  it("rejects authority-overriding query parameters in every environment", () => {
+    expect(() =>
+      assertApplicationDatabaseIdentity(
+        "postgres://app:secret@db.example.com:5432/app?host=localhost&user=fmcf_test",
         "production",
       ),
     ).toThrow("Production database guard rejected the database identity");

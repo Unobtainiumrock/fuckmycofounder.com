@@ -25,12 +25,17 @@ module.exports = {
       to: { path: "(^|/)app/" },
     },
     {
-      name: "modules-stay-framework-neutral",
+      name: "modules-cannot-import-runtime-dependencies",
       severity: "error",
       from: { path: "(^|/)src/modules/" },
       to: {
-        dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer"],
-        path: "^(next|react|react-dom|pg|server-only)(/|$)",
+        dependencyTypes: [
+          "core",
+          "npm",
+          "npm-dev",
+          "npm-optional",
+          "npm-peer",
+        ],
       },
     },
     {
@@ -46,9 +51,18 @@ module.exports = {
       to: { path: "(^|/)src/platform/(persistence|restricted)/" },
     },
     {
-      name: "routes-use-module-public-interface",
+      name: "app-cannot-import-database-clients",
       severity: "error",
-      from: { path: "(^|/)app/(api/.+/route|.+action)\\.[cm]?[jt]sx?$" },
+      from: { path: "(^|/)app/" },
+      to: {
+        dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer"],
+        path: "node_modules/\\.pnpm/(pg@|node-pg-migrate@)",
+      },
+    },
+    {
+      name: "app-uses-module-public-interface",
+      severity: "error",
+      from: { path: "(^|/)app/" },
       to: { path: "(^|/)src/modules/[^/]+/(?!index\\.[cm]?[jt]sx?$)" },
     },
     {

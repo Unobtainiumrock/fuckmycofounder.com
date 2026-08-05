@@ -43,6 +43,10 @@ module-owned interfaces and depend on `shared`. `modules` may depend only on
 `shared`. Modules never import `app`, React, `next/*`, or concrete platform
 implementations. A port exists only when behavior varies across at least two
 justified adapters, normally production and deterministic test versions.
+One domain module never imports another; composition belongs in `app` or an
+explicit owning application seam. Server Functions use the enforced
+`*.action.ts(x)` convention, and all `app` entrypoints are prohibited from
+importing database clients or module-internal policy files.
 
 ## Runtime posture
 

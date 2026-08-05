@@ -1,8 +1,9 @@
 import Link from "next/link";
+import type { ReactElement } from "react";
 
 import { CookedQuizClient } from "./_client/cooked-quiz-client";
 
-export default function HomePage() {
+export default function HomePage(): ReactElement {
   return (
     <>
       <a className="skip-link" href="#main">

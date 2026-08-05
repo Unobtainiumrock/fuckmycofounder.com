@@ -8,6 +8,11 @@ const contactRules = [
   },
   { pattern: /\+?\d[\d\s().-]{7,}\d/u, label: "phone number" },
 ] as const;
+const maximumLengths: Record<StatementField, number> = {
+  incident: 180,
+  quote: 140,
+  translation: 80,
+};
 
 export type ChargeId = (typeof charges)[number]["id"];
 type StatementField = "incident" | "quote" | "translation";
@@ -79,11 +84,17 @@ function normalizeText(value: string): string {
   return value.trim().replace(/\s+/gu, " ");
 }
 
-function validateStatement(value: string): string | undefined {
+function validateStatement(
+  field: StatementField,
+  value: string,
+): string | undefined {
   const normalized = normalizeText(value);
   if (!normalized) return "This blank is doing founder-level work avoidance.";
   if (normalized.length < 8)
     return "Give the board at least eight characters of lore.";
+  if (normalized.length > maximumLengths[field]) {
+    return `Keep this blank to ${maximumLengths[field]} characters or fewer.`;
+  }
 
   const contact = contactRules.find(({ pattern }) => pattern.test(normalized));
   return contact
@@ -99,7 +110,7 @@ function validateSubmission(
     errors.chargeId = "Pick one count of cofounder nonsense.";
 
   for (const field of ["incident", "quote", "translation"] as const) {
-    const error = validateStatement(submission[field]);
+    const error = validateStatement(field, submission[field]);
     if (error) errors[field] = error;
   }
   return errors;

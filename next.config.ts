@@ -8,7 +8,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async headers() {
     return [
-      { source: "/", headers: [...securityHeadersFor("public-document")] },
+      {
+        source: "/:path((?!api(?:/|$)).*)",
+        headers: [...securityHeadersFor("public-document")],
+      },
       {
         source: "/api/:path*",
         headers: [...securityHeadersFor("operational-json")],

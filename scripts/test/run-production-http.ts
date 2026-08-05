@@ -56,6 +56,45 @@ async function stopServer(process: ChildProcess): Promise<void> {
   });
 }
 
+async function assertInvalidStartupRejected(): Promise<void> {
+  const server = spawn(process.execPath, [standaloneServer], {
+    cwd: standaloneRoot,
+    env: {
+      ...process.env,
+      APP_ENV: "production",
+      HOSTNAME: "127.0.0.1",
+      PORT: "4334",
+      REQUIRE_DATABASE: "false",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  server.stdout?.on("data", (chunk: Buffer) => {
+    output += chunk.toString();
+  });
+  server.stderr?.on("data", (chunk: Buffer) => {
+    output += chunk.toString();
+  });
+
+  const exitCode = await Promise.race([
+    new Promise<number | null>((resolve) => server.once("exit", resolve)),
+    new Promise<"timeout">((resolve) =>
+      setTimeout(() => resolve("timeout"), 10_000),
+    ),
+  ]);
+
+  if (exitCode === "timeout") {
+    await stopServer(server);
+    throw new Error("Invalid production configuration did not fail startup");
+  }
+  if (
+    exitCode === 0 ||
+    !output.includes("Application configuration is invalid")
+  ) {
+    throw new Error("Invalid production configuration failed unsafely");
+  }
+}
+
 async function runScenario(scenario: Scenario): Promise<void> {
   const baseUrl = `http://127.0.0.1:${scenario.port}`;
   const server = spawn(process.execPath, [standaloneServer], {
@@ -104,6 +143,7 @@ async function runScenario(scenario: Scenario): Promise<void> {
 }
 
 await prepareStandalone();
+await assertInvalidStartupRejected();
 await runScenario({
   environment: { REQUIRE_DATABASE: "false" },
   expectedReadyStatus: 200,
@@ -111,7 +151,8 @@ await runScenario({
 });
 await runScenario({
   environment: {
-    DATABASE_URL: "postgres://unavailable:unavailable@127.0.0.1:1/unavailable",
+    DATABASE_URL:
+      "postgres://unavailable_test:unavailable@127.0.0.1:1/unavailable_test",
     REQUIRE_DATABASE: "true",
   },
   expectedReadyStatus: 503,

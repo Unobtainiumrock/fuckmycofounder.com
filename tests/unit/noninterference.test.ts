@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { findProjectionLeaks } from "../support/noninterference";
 
@@ -91,5 +91,29 @@ describe("public/restricted noninterference harness", () => {
       new Set(publicErrors.map((error) => JSON.stringify(error))).size,
     ).toBe(1);
     expect(findProjectionLeaks(publicErrors, policy)).toEqual([]);
+  });
+
+  it("inspects non-enumerable Error messages and causes", () => {
+    const error = new Error("Public operation failed", {
+      cause: new Error("driver leaked acct_01K2SECRET"),
+    });
+
+    expect(findProjectionLeaks(error, policy)).toContainEqual({
+      kind: "forbidden-value",
+      path: "$.cause.message",
+      value: "acct_01K2SECRET",
+    });
+  });
+
+  it("rejects forbidden accessor names without invoking the accessor", () => {
+    const getter = vi.fn(() => "acct_01K2SECRET");
+    const value = Object.defineProperty({}, "accountId", { get: getter });
+
+    expect(findProjectionLeaks(value, policy)).toContainEqual({
+      kind: "forbidden-key",
+      path: "$.accountId",
+      value: "accountId",
+    });
+    expect(getter).not.toHaveBeenCalled();
   });
 });
