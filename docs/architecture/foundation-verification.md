@@ -102,7 +102,7 @@ was contacted.
 | `pnpm check:unused` | pass |
 | `pnpm typecheck` | pass |
 | `pnpm build:app` | pass |
-| `pnpm test:all` | pass (22 legacy + 79 Vitest assertions) |
+| `pnpm test:all` | pass (22 legacy + 80 Vitest assertions) |
 | `pnpm test:integration` | pass (4 Postgres + 4 production HTTP assertions) |
 | `pnpm test:e2e` | pass (3 production-built browser journeys) |
 | `pnpm check:file-sizes` | pass |
