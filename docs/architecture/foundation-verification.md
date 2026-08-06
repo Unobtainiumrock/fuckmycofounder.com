@@ -76,3 +76,29 @@ provider. Current `main` independently contains a Cloudflare static deployment
 with Pages Functions, KV, R2, and D1; this record supplies no provider read-back,
 preview, live migration, crawler-unfurl, or acceptance evidence for that system.
 Those external checks require separate authority.
+
+## Clean-checkout gate record
+
+The clean checkout at `176215b230e685298f0381c55d038bbd0be2e522` used the
+downloaded pinned Node.js 24.18.0 runtime, Corepack pnpm 9.15.4, PostgreSQL
+17.10-alpine, and the exact `fmcf_test` database/user identity on local port
+54329. The default 5432 host port belonged to an unrelated local service, so
+the disposable container was recreated on 54329 before connecting; the guard
+accepted the URL and no non-test identity was contacted.
+
+| Command | Result |
+| --- | --- |
+| `pnpm format:check` | pass |
+| `pnpm lint` | pass |
+| `pnpm check:architecture` | pass (17 contracts) |
+| `pnpm check:unused` | pass |
+| `pnpm typecheck` | pass |
+| `pnpm build:app` | pass |
+| `pnpm test:all` | pass (22 legacy + 77 Vitest assertions) |
+| `pnpm test:integration` | pass (4 Postgres + 4 production HTTP assertions) |
+| `pnpm test:e2e` | pass (3 production-built browser journeys) |
+| `pnpm check:file-sizes` | pass |
+| `pnpm openspec:validate` | pass |
+| `pnpm test:container` | pass |
+| `pnpm build` | pass (legacy static fingerprint build) |
+| `pnpm test` | pass (22 legacy assertions) |
