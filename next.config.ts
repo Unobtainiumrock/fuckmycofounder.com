@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-import { securityHeadersFor } from "./src/platform/http/security-headers";
+import {
+  networkSecurityHeadersFor,
+  securityHeadersFor,
+} from "./src/platform/http/security-headers";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -9,7 +12,16 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path((?!api(?:/|$)).*)",
+        source: "/account/:path*",
+        headers: [
+          ...networkSecurityHeadersFor({
+            firstPartyOrigin: "https://fuckmycofounder.com",
+            authenticationOrigins: [],
+          }),
+        ],
+      },
+      {
+        source: "/:path((?!api(?:/|$)|account(?:/|$)).*)",
         headers: [...securityHeadersFor("public-document")],
       },
       {
