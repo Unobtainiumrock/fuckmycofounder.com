@@ -76,6 +76,38 @@ crop/frame/text fitting. Their final re-reviews found no high or medium
 findings. They also rechecked the public/restricted projection boundary,
 disposable `_test` database guards, and provider-scope containment.
 
+## Corrective parity closeout
+
+A subsequent root review of `d15cb4f..bb04411` correctly reopened tasks 1.3,
+7.1, and 7.2: the public document CSP blocked local `blob:` mugshots, malformed
+claimed-PNG input could leave a broken preview, the reset stylesheet overrode
+native `[hidden]`, Case File text fitting was missing, and mocked canvas calls
+were being treated as primary visual proof. Commit `955b479` restores static
+image ingestion: it decodes and square-normalizes accepted JPEG, PNG, and WebP
+bytes before retaining a local URL, revokes transient URLs, preserves a safe
+error, and makes unexpected card-image failures visible through the existing
+safe toast. It adds route-local `blob:` image permission without widening
+operational JSON CSP, restores post-render field fitting, and keeps the static
+Cloudflare provider boundary unchanged.
+
+Production-built Playwright now proves selected preview and final images have a
+nonzero normalized width, malformed claimed-image bytes are rejected without a
+visible broken preview, maximum unbroken text has no horizontal clipping on
+desktop or mobile (and shrinks on mobile), and the downloaded card decodes in
+the browser as a 1200×1500 PNG. The regenerated Case File snapshot was visually
+reviewed after image decode; it shows the intended local mugshot, not a broken
+placeholder. The strict snapshot reran twice consecutively before acceptance.
+
+The final clean checkout at `955b479` used frozen dependencies, local Node
+24.18.1, PostgreSQL 17.10-alpine on `fmcf_test` at port 54329, and the pinned
+Node 24.18.0 container image. It passed formatting, lint, architecture (17
+contracts), unused exports, typecheck, Next build, 22 legacy plus 79 Vitest
+tests, four Postgres tests, both four-assertion production HTTP configurations,
+five Playwright journeys, file-size policy, strict OpenSpec (11/0), container
+smoke, and legacy `build`/`test`. A fresh final standards/spec review of
+`bb04411..955b479` remains required before publication; no provider, deployment,
+secret, DNS, or live data mutation occurred during this corrective pass.
+
 ## Explicitly deferred evidence
 
 The foundation work selected or mutated no production database, authentication,
