@@ -81,26 +81,34 @@ function drawSections(
   const left = 72;
   const maximumWidth = width - 144;
   const sections: ReadonlyArray<
-    readonly [string, string, number, number, number]
+    readonly [string, string, number, number, number, number]
   > = [
-    ["CHARGE", report.charge, 46, 56, 2],
-    ["STATEMENT", `My cofounder ${report.incident}.`, 37, 48, 4],
-    ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 3],
-    ["ADULT TRANSLATION", report.translation, 37, 48, 3],
+    ["CHARGE", report.charge, 46, 56, 2, 30],
+    ["STATEMENT", `My cofounder ${report.incident}.`, 37, 48, 5, 24],
+    ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 4, 24],
+    ["ADULT TRANSLATION", report.translation, 37, 48, 3, 24],
   ];
   if (avatar) drawAvatar(context, avatar);
   let y = 305;
-  for (const [heading, text, size, lineHeight, maximumLines] of sections) {
+  for (const [
+    heading,
+    text,
+    size,
+    lineHeight,
+    maximumLines,
+    minimumSize,
+  ] of sections) {
     const sectionWidth = avatar && y < 446 ? maximumWidth - 272 : maximumWidth;
     drawLabel(context, heading, left, y);
     y += 48;
     context.fillStyle = colors.paper;
-    context.font = `700 ${size}px Arial, sans-serif`;
     y =
-      drawWrapped(context, text, {
+      drawFitted(context, text, {
+        baseSize: size,
         lineHeight,
         maximumLines,
         maximumWidth: sectionWidth,
+        minimumSize,
         x: left,
         y,
       }) + 38;
@@ -115,13 +123,15 @@ function drawSections(
   context.fillRect(left, footerTop, width - left * 2, 5);
   drawLabel(context, "BOARD DISPOSITION", left, footerTop + 55);
   context.fillStyle = colors.acid;
-  context.font = "900 61px Impact, Arial Narrow, sans-serif";
-  drawWrapped(context, report.disposition.toUpperCase(), {
+  drawFitted(context, report.disposition.toUpperCase(), {
+    baseSize: 80,
     lineHeight: 67,
     maximumLines: 3,
     maximumWidth,
+    minimumSize: 34,
     x: left,
     y: footerTop + 125,
+    fontForSize: (size) => `900 ${size}px Impact, Arial Narrow, sans-serif`,
   });
   context.fillStyle = "rgba(244,237,223,.62)";
   context.font = "700 24px monospace";
@@ -166,21 +176,33 @@ function drawAvatar(
   context.restore();
 }
 
-function drawWrapped(
+function drawFitted(
   context: CanvasRenderingContext2D,
   text: string,
   options: {
+    readonly baseSize: number;
+    readonly fontForSize?: (size: number) => string;
     readonly lineHeight: number;
     readonly maximumLines: number;
     readonly maximumWidth: number;
+    readonly minimumSize: number;
     readonly x: number;
     readonly y: number;
   },
 ): number {
-  const lines = wrapLines(context, text, options.maximumWidth).slice(
-    0,
-    options.maximumLines,
-  );
+  const fontForSize =
+    options.fontForSize ??
+    ((size: number) => `700 ${size}px Arial, sans-serif`);
+  let size = options.baseSize;
+  context.font = fontForSize(size);
+  let lines = wrapLines(context, text, options.maximumWidth);
+  while (size > options.minimumSize && lines.length > options.maximumLines) {
+    size -= 1;
+    context.font = fontForSize(size);
+    lines = wrapLines(context, text, options.maximumWidth);
+  }
+  context.font = fontForSize(size);
+  lines = lines.slice(0, options.maximumLines);
   lines.forEach((line, index) =>
     context.fillText(line, options.x, options.y + index * options.lineHeight),
   );

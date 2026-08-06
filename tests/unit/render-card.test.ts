@@ -16,17 +16,20 @@ const report = {
 describe("report card renderer", () => {
   const drawImage = vi.fn();
   const fillText = vi.fn();
+  const measureText = vi.fn();
 
   beforeEach(() => {
     drawImage.mockReset();
     fillText.mockReset();
+    measureText.mockReset();
+    measureText.mockReturnValue({ width: 1 });
     const context = {
       beginPath: vi.fn(),
       drawImage,
       fillRect: vi.fn(),
       fillText,
       lineTo: vi.fn(),
-      measureText: vi.fn(() => ({ width: 1 })),
+      measureText,
       moveTo: vi.fn(),
       restore: vi.fn(),
       rotate: vi.fn(),
@@ -72,5 +75,16 @@ describe("report card renderer", () => {
       200,
     );
     expect(fillText).toHaveBeenCalledWith("SUBJECT", 112, 240);
+  });
+
+  it("keeps the static renderer's fifth statement line", async () => {
+    measureText.mockReturnValue({ width: 2000 });
+
+    await renderCardBlob(
+      { ...report, incident: "one two three four five six" },
+      "blob:subject",
+    );
+
+    expect(fillText).toHaveBeenCalledWith("three", 72, expect.any(Number));
   });
 });
