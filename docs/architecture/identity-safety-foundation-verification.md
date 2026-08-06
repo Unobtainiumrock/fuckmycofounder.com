@@ -61,6 +61,32 @@ Change: `add-account-identity-and-safety-foundation`
 | Signed-out provider-neutral boundary | `tests/e2e/account-boundary.spec.ts` |
 | Security, privacy, accessibility, operations | threat model and moderator runbook |
 
+## Close-out evidence
+
+Repository verification at `02c12f7` used the pinned Node 24.18.1 runtime:
+
+- 22 legacy Caseboard/Cooked Quiz tests and 167 unit/contract tests passed.
+- 15 disposable-PostgreSQL tests passed, covering clean apply, upgrade,
+  repeat, rollback, populated rollback refusal, atomic audit rollback,
+  concurrency, authorization, canonical state revalidation, and retention.
+- Both production HTTP configurations, the Next.js production build, the
+  static fingerprinted build, and the container smoke test passed.
+- Formatting, lint, architecture, unused-code, typecheck, source-size,
+  `git diff --check`, and strict OpenSpec validation passed.
+- Browser acceptance passed the Account boundary, mobile Cooked Quiz,
+  keyboard dialog, and reduced-motion cases. The existing foundation macOS
+  acquisition snapshot remains non-green: expected 1440x2633, observed
+  1440x2659. The same mismatch reproduces on the untouched foundation branch,
+  so this change does not update that inherited visual baseline.
+
+Independent standards/security and OpenSpec reviews reported no residual
+repository findings and no high-severity findings after their final pass at
+`02c12f7`. Earlier findings were corrected before close-out, including
+canonical session reauthentication, Account self-targeting, claim and appeal
+eligibility, abuse routing, report lifecycle ownership, audit derivation,
+restricted-reveal coupling and case/linkage binding, and explicit claimed-
+Profile opt-in.
+
 ## Evidence classes and remaining authority
 
 Repository proof does not establish deployment or live-provider acceptance.

@@ -53,5 +53,5 @@ Evidence: [`audit-retention-access.test.ts`](../../../tests/unit/audit-retention
 
 Evidence record: [`identity-safety-foundation-verification.md`](../../../docs/architecture/identity-safety-foundation-verification.md) and [`identity-safety-threat-model.md`](../../../docs/architecture/identity-safety-threat-model.md).
 
-- [ ] 7.1 Run unit, integration, authorization, retention, and browser tests for signed-out, empty, unavailable-provider, blocked, restricted, suspended, deletion-pending, deleted, appealed, and abuse states.
-- [ ] 7.2 Complete security, privacy, accessibility, threat-model, and moderator-runbook review; document the specialist legal decisions still required before launch.
+- [x] 7.1 Run unit, integration, authorization, retention, and browser tests for signed-out, empty, unavailable-provider, blocked, restricted, suspended, deletion-pending, deleted, appealed, and abuse states.
+- [x] 7.2 Complete security, privacy, accessibility, threat-model, and moderator-runbook review; document the specialist legal decisions still required before launch.
