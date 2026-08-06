@@ -67,6 +67,15 @@ unchanged and outside Order 0. The Next board-key form therefore names that
 retrieval remains on the static production surface rather than attempting a
 partial provider migration.
 
+## Independent final review
+
+Two independent standards/spec reviews of `d15cb4f..0ad8335` found and then
+verified fixes for truthful Town Board copy, progressive draft preview,
+identifier redaction, local mugshot card/share behavior, and static card
+crop/frame/text fitting. Their final re-reviews found no high or medium
+findings. They also rechecked the public/restricted projection boundary,
+disposable `_test` database guards, and provider-scope containment.
+
 ## Explicitly deferred evidence
 
 The foundation work selected or mutated no production database, authentication,
