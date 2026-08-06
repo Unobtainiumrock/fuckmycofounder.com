@@ -28,6 +28,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
     .locator("[data-avatar-input]")
     .setInputFiles("public/assets/images/share-card.png");
   await page.getByLabel("My cofounder…").fill("called a six a.m. meeting");
+  await expect(
+    page.getByRole("article", { name: "Live case file preview" }),
+  ).toContainText("called a six a.m. meeting");
   await page
     .getByLabel("When asked about it, they said…")
     .fill("we move at the speed of trust");
@@ -48,6 +51,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   await expect(caseFile).toContainText("Weaponized ‘Quick Sync’");
   await expect(caseFile).toContainText("calendar warfare");
   await expect(caseFile.locator("[data-report-subject]")).toBeVisible();
+  await expect(
+    page.getByText("Sharing creates a private-ish fragment link."),
+  ).toBeVisible();
   if (process.platform === "darwin") {
     await expect(caseFile).toHaveScreenshot("acquisition-case-file.png", {
       animations: "disabled",

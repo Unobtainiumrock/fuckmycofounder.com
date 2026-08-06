@@ -30,6 +30,24 @@ describe("Cooked Quiz module", () => {
     });
   });
 
+  it("renders a deterministic draft preview before every required field is complete", () => {
+    const quiz = createCookedQuiz({ clock: fixedClock });
+
+    expect(
+      quiz.preview({
+        chargeId: "quick-sync",
+        incident: "missed the launch review",
+        quote: "",
+        translation: "",
+      }),
+    ).toMatchObject({
+      charge: "Weaponized ‘Quick Sync’",
+      incident: "missed the launch review",
+      quote: "",
+      translation: "",
+    });
+  });
+
   it("round-trips an accepted report through the supported fragment", () => {
     const quiz = createCookedQuiz({ clock: fixedClock });
     const submitted = quiz.submit(payload);

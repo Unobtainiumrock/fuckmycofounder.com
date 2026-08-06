@@ -50,15 +50,14 @@ migration was introduced.
 
 The 2026-08-05 static-production reconciliation compared the current static
 `/` build and the production-built Next route at a 1440×900 desktop viewport.
-Both rendered the same 1440×3078 full-page landing after the Next route
-incorporated the current content, Town Board entry, optional browser-local
-subject image, live case-file preview, validation, deterministic report,
-responsive dialog, fragment restoration, and client-side share/download
-controls. The prior macOS Playwright baseline was 1440×2633 while the
-then-current Next result was 1440×2659; it was obsolete rather than a
-threshold issue. The replacement body-locator baseline is 1440×3081 (the
-three-pixel body raster difference from the full-page measurement is expected)
-and was regenerated only after the static/Next visual comparison. It is
+The current static landing measured 1440×3078 at full page. The final Next
+landing has the same visual structure and self-contained interaction, with a
+1440×3057 body-locator baseline. Its 21-pixel shorter final copy is intentional:
+it says sharing is fragment-only and that live Town Board retrieval remains
+static-production behavior, rather than falsely implying a provider migration.
+The prior macOS Playwright baseline was 1440×2633 while the then-current Next
+result was 1440×2659; it was obsolete rather than a threshold issue. The final
+baseline was regenerated only after the static/Next visual comparison and is
 rechecked by the production-build Playwright journey.
 
 The provider boundary is intentional: the Next route retains the `/board`
@@ -79,12 +78,12 @@ Those external checks require separate authority.
 
 ## Clean-checkout gate record
 
-The clean checkout at `176215b230e685298f0381c55d038bbd0be2e522` used the
-downloaded pinned Node.js 24.18.0 runtime, Corepack pnpm 9.15.4, PostgreSQL
-17.10-alpine, and the exact `fmcf_test` database/user identity on local port
-54329. The default 5432 host port belonged to an unrelated local service, so
-the disposable container was recreated on 54329 before connecting; the guard
-accepted the URL and no non-test identity was contacted.
+The final clean checkout uses the downloaded pinned Node.js 24.18.0 runtime,
+Corepack pnpm 9.15.4, PostgreSQL 17.10-alpine, and the exact `fmcf_test`
+database/user identity on local port 54329. The default 5432 host port belonged
+to an unrelated local service, so the disposable container was recreated on
+54329 before connecting; the guard accepted the URL and no non-test identity
+was contacted.
 
 | Command | Result |
 | --- | --- |
@@ -94,7 +93,7 @@ accepted the URL and no non-test identity was contacted.
 | `pnpm check:unused` | pass |
 | `pnpm typecheck` | pass |
 | `pnpm build:app` | pass |
-| `pnpm test:all` | pass (22 legacy + 77 Vitest assertions) |
+| `pnpm test:all` | pass (22 legacy + 78 Vitest assertions) |
 | `pnpm test:integration` | pass (4 Postgres + 4 production HTTP assertions) |
 | `pnpm test:e2e` | pass (3 production-built browser journeys) |
 | `pnpm check:file-sizes` | pass |

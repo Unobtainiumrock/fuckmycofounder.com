@@ -107,10 +107,9 @@ export function initializeCookedQuiz(): () => void {
   };
 
   const updateLivePreview = (): void => {
-    const result = quiz.submit(collectSubmission(form));
-    previewWrap.hidden = result.status !== "accepted";
-    if (result.status === "accepted")
-      renderReport(result.report, preview, avatarUrl);
+    const report = quiz.preview(collectSubmission(form));
+    previewWrap.hidden = !report;
+    if (report) renderReport(report, preview, avatarUrl);
   };
 
   const resetReport = (): void => {

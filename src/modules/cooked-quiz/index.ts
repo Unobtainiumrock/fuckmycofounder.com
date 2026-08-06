@@ -50,6 +50,7 @@ export type RestoreResult =
 export interface CookedQuiz {
   caseTicker(): string;
   encode(report: CookedQuizReport): string;
+  preview(submission: CookedQuizSubmission): CookedQuizReport | undefined;
   restore(fragment: string): RestoreResult;
   submit(submission: CookedQuizSubmission): SubmissionResult;
 }
@@ -70,6 +71,8 @@ export function createCookedQuiz({ clock }: { clock: Clock }): CookedQuiz {
         Math.floor(clock.now().getTime() / 86_400_000) % 1_000_000,
       ).padStart(6, "0"),
     encode: encodeReport,
+    preview: (submission) =>
+      isChargeId(submission.chargeId) ? buildReport(submission) : undefined,
     restore: (fragment) => {
       const decoded = decodeFragment(fragment);
       if (!decoded) return { status: "ignored" };

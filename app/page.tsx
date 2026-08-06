@@ -148,8 +148,8 @@ export default function HomePage(): ReactElement {
             <p className="eyebrow">PUBLIC RECORD / VIBES JURISDICTION</p>
             <h2 id="board-entry-title">The Town Board</h2>
             <p>
-              Live filings live on their own page. Finish a report and share it
-              to land there automatically — or come back with your board key.
+              Live filings stay on the static production board. This local
+              report stays in your browser; visit the docket to read it.
             </p>
           </div>
           <div className="board-entry__actions">
@@ -409,9 +409,8 @@ function ReportDialog() {
               </button>
             </div>
             <p className="share-note">
-              *Sharing posts your case to the Town Board and takes you there.
-              Your <strong>CASE #</strong> is the board key for later visits.
-              Still no names, still satire.
+              *Sharing creates a private-ish fragment link. It does not publish
+              a Town Board filing. Still no names, still satire.
             </p>
             <div
               className="toast"
