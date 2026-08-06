@@ -65,7 +65,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   );
   await caseFile.locator("[data-report-avatar]").evaluate(async (element) => {
     await (element as HTMLImageElement).decode();
-    await new Promise<void>((resolve) => requestAnimationFrame(resolve));
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
   });
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download card" }).click();
@@ -91,11 +93,10 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
     const pixels = context.getImageData(916, 184, 200, 200).data;
     let hasSelectedRed = false;
     for (let index = 0; index < pixels.length; index += 4) {
-      if (
-        pixels[index] > 180 &&
-        pixels[index + 1] < 100 &&
-        pixels[index + 2] < 100
-      ) {
+      const red = pixels[index] ?? 0;
+      const green = pixels[index + 1] ?? 0;
+      const blue = pixels[index + 2] ?? 0;
+      if (red > 180 && green < 100 && blue < 100) {
         hasSelectedRed = true;
         break;
       }
