@@ -139,7 +139,7 @@ function drawAvatar(
   const sourceX = (image.naturalWidth - sourceSize) / 2;
   const sourceY = (image.naturalHeight - sourceSize) / 2;
   const frameWidth = size + 24;
-  const frameHeight = size + 62;
+  const frameHeight = size + 12 + 38;
   context.save();
   context.translate(x + frameWidth / 2, y + frameHeight / 2);
   context.rotate(0.028);
@@ -162,7 +162,7 @@ function drawAvatar(
   context.fillStyle = colors.ink;
   context.font = "900 22px monospace";
   context.textAlign = "center";
-  context.fillText("SUBJECT", frameWidth / 2, size + 45);
+  context.fillText("SUBJECT", frameWidth / 2, size + 12 + 28);
   context.restore();
 }
 

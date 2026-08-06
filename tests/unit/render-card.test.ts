@@ -15,14 +15,16 @@ const report = {
 
 describe("report card renderer", () => {
   const drawImage = vi.fn();
+  const fillText = vi.fn();
 
   beforeEach(() => {
     drawImage.mockReset();
+    fillText.mockReset();
     const context = {
       beginPath: vi.fn(),
       drawImage,
       fillRect: vi.fn(),
-      fillText: vi.fn(),
+      fillText,
       lineTo: vi.fn(),
       measureText: vi.fn(() => ({ width: 1 })),
       moveTo: vi.fn(),
@@ -69,5 +71,6 @@ describe("report card renderer", () => {
       200,
       200,
     );
+    expect(fillText).toHaveBeenCalledWith("SUBJECT", 112, 240);
   });
 });
