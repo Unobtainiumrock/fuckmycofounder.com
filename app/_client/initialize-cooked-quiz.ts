@@ -10,6 +10,8 @@ import {
   downloadReportCard,
   shareReport,
 } from "./share-report";
+import { fitCaseFile } from "./fit-case-file";
+import { normalizeAvatar } from "./normalize-avatar";
 
 // source-size: reason=one dialog lifecycle keeps DOM contracts and cleanup local
 const quiz = createCookedQuiz({ clock: { now: () => new Date() } });
@@ -50,6 +52,7 @@ export function initializeCookedQuiz(): () => void {
   const toast = requireElement<HTMLElement>(dialog, "[data-toast]");
   let currentReport: CookedQuizReport | undefined;
   let avatarUrl: string | undefined;
+  let avatarRequest = 0;
 
   buildCharges(chargeGrid);
   requireElement<HTMLElement>(document, "[data-year]").textContent = String(
@@ -98,6 +101,7 @@ export function initializeCookedQuiz(): () => void {
   };
 
   const clearAvatar = (): void => {
+    avatarRequest += 1;
     if (avatarUrl) URL.revokeObjectURL(avatarUrl);
     avatarUrl = undefined;
     avatarInput.value = "";
@@ -182,23 +186,36 @@ export function initializeCookedQuiz(): () => void {
     { signal },
   );
 
-  avatarInput.addEventListener(
-    "change",
-    () => {
-      const [file] = avatarInput.files ?? [];
-      if (!file) return;
-      if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type)) {
-        clearAvatar();
-        avatarError.textContent = "Choose a JPEG, PNG, or WebP mugshot.";
+  const setAvatar = async (file: File): Promise<void> => {
+    const request = ++avatarRequest;
+    try {
+      const normalizedUrl = await normalizeAvatar(file);
+      if (request !== avatarRequest) {
+        URL.revokeObjectURL(normalizedUrl);
         return;
       }
-      if (avatarUrl) URL.revokeObjectURL(avatarUrl);
-      avatarUrl = URL.createObjectURL(file);
+      clearAvatar();
+      avatarUrl = normalizedUrl;
       avatarPreview.src = avatarUrl;
       avatarPreview.hidden = false;
       avatarClear.hidden = false;
       avatarError.textContent = "";
       updateLivePreview();
+    } catch (error: unknown) {
+      if (request !== avatarRequest) return;
+      clearAvatar();
+      avatarError.textContent =
+        error instanceof Error
+          ? error.message
+          : "Could not prepare that mugshot.";
+    }
+  };
+
+  avatarInput.addEventListener(
+    "change",
+    () => {
+      const [file] = avatarInput.files ?? [];
+      if (file) void setAvatar(file);
     },
     { signal },
   );
@@ -307,7 +324,10 @@ export function initializeCookedQuiz(): () => void {
   const restored = quiz.restore(location.hash);
   if (restored.status === "accepted") displayReport(restored.report);
 
-  return () => abortController.abort();
+  return () => {
+    abortController.abort();
+    clearAvatar();
+  };
 }
 
 function requireElement<T extends Element = HTMLElement>(
@@ -375,6 +395,7 @@ function renderReport(
   for (const [selector, text] of Object.entries(fields)) {
     requireElement<HTMLElement>(root, selector).textContent = text;
   }
+  requestAnimationFrame(() => fitCaseFile(root));
   const subject = requireElement<HTMLElement>(root, "[data-report-subject]");
   const avatar = requireElement<HTMLImageElement>(root, "[data-report-avatar]");
   subject.hidden = !avatarUrl;

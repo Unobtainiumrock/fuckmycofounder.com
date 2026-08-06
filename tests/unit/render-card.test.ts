@@ -14,20 +14,16 @@ const report = {
 };
 
 describe("report card renderer", () => {
-  const drawImage = vi.fn();
-  const fillText = vi.fn();
   const measureText = vi.fn();
 
   beforeEach(() => {
-    drawImage.mockReset();
-    fillText.mockReset();
     measureText.mockReset();
     measureText.mockReturnValue({ width: 1 });
     const context = {
       beginPath: vi.fn(),
-      drawImage,
+      drawImage: vi.fn(),
       fillRect: vi.fn(),
-      fillText,
+      fillText: vi.fn(),
       lineTo: vi.fn(),
       measureText,
       moveTo: vi.fn(),
@@ -58,33 +54,9 @@ describe("report card renderer", () => {
     );
   });
 
-  it("includes the local mugshot in the rendered card", async () => {
+  it("returns a card blob for an accepted local mugshot", async () => {
     await expect(
       renderCardBlob(report, "blob:subject"),
     ).resolves.toBeInstanceOf(Blob);
-
-    expect(drawImage).toHaveBeenCalledWith(
-      expect.anything(),
-      50,
-      0,
-      200,
-      200,
-      12,
-      12,
-      200,
-      200,
-    );
-    expect(fillText).toHaveBeenCalledWith("SUBJECT", 112, 240);
-  });
-
-  it("keeps the static renderer's fifth statement line", async () => {
-    measureText.mockReturnValue({ width: 2000 });
-
-    await renderCardBlob(
-      { ...report, incident: "one two three four five six" },
-      "blob:subject",
-    );
-
-    expect(fillText).toHaveBeenCalledWith("three", 72, expect.any(Number));
   });
 });

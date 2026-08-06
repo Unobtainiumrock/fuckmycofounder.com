@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
 test("landing and Cooked Quiz preserve the approved Caseboard experience", async ({
@@ -46,6 +48,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   await expect(
     page.locator("[data-case-preview] [data-report-subject]"),
   ).toBeVisible();
+  await expect(
+    page.locator("[data-case-preview] [data-report-avatar]"),
+  ).toHaveJSProperty("naturalWidth", 256);
   await page.getByRole("button", { name: "Generate case file ↗" }).click();
 
   const caseFile = page.getByRole("article", {
@@ -54,6 +59,32 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   await expect(caseFile).toContainText("Weaponized ‘Quick Sync’");
   await expect(caseFile).toContainText("calendar warfare");
   await expect(caseFile.locator("[data-report-subject]")).toBeVisible();
+  await expect(caseFile.locator("[data-report-avatar]")).toHaveJSProperty(
+    "naturalWidth",
+    256,
+  );
+  await caseFile.locator("[data-report-avatar]").evaluate(async (element) => {
+    await (element as HTMLImageElement).decode();
+    await new Promise<void>((resolve) => requestAnimationFrame(resolve));
+  });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download card" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/incident-report\.png$/u);
+  const downloadPath = await download.path();
+  if (!downloadPath) throw new Error("Card download has no local path.");
+  const downloadedCard = await readFile(downloadPath);
+  const decodedCard = await page.evaluate(async (base64) => {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () =>
+        reject(new Error("Downloaded card did not decode."));
+      image.src = `data:image/png;base64,${base64}`;
+    });
+    return { height: image.naturalHeight, width: image.naturalWidth };
+  }, downloadedCard.toString("base64"));
+  expect(decodedCard).toEqual({ height: 1500, width: 1200 });
   await expect(
     page.getByText("Sharing creates a private-ish fragment link."),
   ).toBeVisible();
@@ -62,6 +93,40 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
       animations: "disabled",
     });
   }
+});
+
+test("rejects malformed mugshots instead of leaving a broken preview", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Begin emotional paperwork" }).click();
+  await page.getByLabel("Weaponized ‘Quick Sync’").check();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.locator("[data-avatar-input]").setInputFiles({
+    buffer: Buffer.from("not an image"),
+    mimeType: "image/png",
+    name: "broken.png",
+  });
+
+  await expect(page.locator("[data-avatar-error]")).toHaveText(
+    "That image refused to load.",
+  );
+  await expect(page.locator("[data-avatar-preview]")).toBeHidden();
+});
+
+test("fits maximum Case File text on desktop", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Begin emotional paperwork" }).click();
+  await page.getByLabel("Weaponized ‘Quick Sync’").check();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await fillMaximumCaseFileText(page);
+  await page.getByRole("button", { name: "Generate case file ↗" }).click();
+  await expectFittedCaseFile(
+    page.getByRole("article", {
+      name: "Generated cofounder incident report",
+    }),
+    false,
+  );
 });
 
 test.describe("mobile acquisition journey", () => {
@@ -83,21 +148,66 @@ test.describe("mobile acquisition journey", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByLabel("Weaponized ‘Quick Sync’").check();
     await page.getByRole("button", { name: "Continue" }).tap();
-    await page.getByLabel("My cofounder…").fill("missed the launch review");
-    await page
-      .getByLabel("When asked about it, they said…")
-      .fill("calendars are a social construct");
-    await page
-      .getByLabel("Sane adults might call this…")
-      .fill("calendar warfare");
+    await fillMaximumCaseFileText(page);
     await page.getByRole("button", { name: "Generate case file ↗" }).tap();
     await expect(
       page.getByRole("article", {
         name: "Generated cofounder incident report",
       }),
     ).toBeVisible();
+    await expectFittedCaseFile(
+      page.getByRole("article", {
+        name: "Generated cofounder incident report",
+      }),
+      true,
+    );
   });
 });
+
+async function fillMaximumCaseFileText(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page.getByLabel("My cofounder…").fill("a".repeat(180));
+  await page
+    .getByLabel("When asked about it, they said…")
+    .fill("b".repeat(140));
+  await page.getByLabel("Sane adults might call this…").fill("c".repeat(80));
+}
+
+async function expectFittedCaseFile(
+  caseFile: import("@playwright/test").Locator,
+  mustShrink: boolean,
+): Promise<void> {
+  const selectors = [
+    "[data-report-incident]",
+    "[data-report-quote]",
+    "[data-report-translation]",
+  ];
+  for (const selector of selectors) {
+    const field = caseFile.locator(selector);
+    await expect(field).toHaveJSProperty(
+      "scrollWidth",
+      await field.evaluate((element) => element.clientWidth),
+    );
+  }
+  if (mustShrink) {
+    await expect
+      .poll(async () =>
+        Math.min(
+          ...(await Promise.all(
+            selectors.map((selector) =>
+              caseFile
+                .locator(selector)
+                .evaluate((element) =>
+                  Number.parseFloat(getComputedStyle(element).fontSize),
+                ),
+            ),
+          )),
+        ),
+      )
+      .toBeLessThan(14.4);
+  }
+}
 
 test("supports keyboard dialog control and reduced motion", async ({
   page,
