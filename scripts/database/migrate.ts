@@ -13,5 +13,5 @@ if (!databaseUrl) {
 await runMigrations({
   appEnvironment: "test",
   databaseUrl,
-  directory: path.resolve("migrations"),
+  directory: path.resolve("migrations/postgres"),
 });

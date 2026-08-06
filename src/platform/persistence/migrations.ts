@@ -15,6 +15,7 @@ interface MigrationRunOptions {
   readonly count?: number;
   readonly databaseUrl: string;
   readonly directory: string;
+  readonly direction?: "down" | "up";
 }
 
 export async function runMigrations(
@@ -31,7 +32,7 @@ export async function runMigrations(
     checkOrder: true,
     databaseUrl: options.databaseUrl,
     dir: options.directory,
-    direction: "up",
+    direction: options.direction ?? "up",
     ignorePattern: "README\\.md",
     ...(options.count === undefined ? {} : { count: options.count }),
     migrationsTable: "foundation_migrations",

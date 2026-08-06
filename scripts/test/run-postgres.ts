@@ -11,7 +11,9 @@ const result = spawnSync(
   [
     "node_modules/vitest/vitest.mjs",
     "run",
+    "--no-file-parallelism",
     "tests/integration/postgres-foundation.test.ts",
+    "tests/integration/postgres-identity-safety.test.ts",
   ],
   {
     cwd: process.cwd(),
