@@ -12,18 +12,23 @@ export type AccountCapability =
   | "protected-action"
   | "read-notices";
 
-export interface Account {
+interface AccountBase {
   readonly id: string;
-  readonly state: AccountState;
-  readonly preDeletionState?: Exclude<
-    AccountState,
-    "deletion-pending" | "deleted"
-  >;
-  readonly deletionRequestedAt?: Date;
-  readonly identityErasureDueAt?: Date;
-  readonly backupErasureDueAt?: Date;
   readonly verifiedContact: boolean;
 }
+
+export type Account =
+  | (AccountBase & { readonly state: "active" | "limited" | "suspended" })
+  | (AccountBase & {
+      readonly state: "deletion-pending";
+      readonly preDeletionState: "active" | "limited" | "suspended";
+      readonly deletionRequestedAt: Date;
+    })
+  | (AccountBase & {
+      readonly state: "deleted";
+      readonly identityErasureDueAt: Date;
+      readonly backupErasureDueAt: Date;
+    });
 
 export type AuthenticationProvider = "apple" | "email-link" | "google";
 export type ProviderAvailability = "available" | "disabled" | "unavailable";
@@ -69,19 +74,24 @@ export interface RestrictedAttributionProjection {
 
 export type ProfileClaimState = "pending" | "verified" | "rejected" | "revoked";
 
-export interface ProfileClaim {
+interface ProfileClaimBase {
   readonly id: string;
   readonly accountId: string;
   readonly profileId: string;
-  readonly state: ProfileClaimState;
   readonly evidenceKind:
     | "authoritative-control"
     | "human-review"
     | "surface-attribute";
-  readonly decidedAt?: Date;
-  readonly appealDeadline?: Date;
-  readonly evidenceExpiresAt?: Date;
 }
+
+export type ProfileClaim =
+  | (ProfileClaimBase & { readonly state: "pending" })
+  | (ProfileClaimBase & {
+      readonly state: "verified" | "rejected" | "revoked";
+      readonly decidedAt: Date;
+      readonly appealDeadline: Date;
+      readonly evidenceExpiresAt: Date;
+    });
 
 export interface PublicClaimProjection {
   readonly profileId: string;
@@ -125,7 +135,7 @@ export type EnforcementOutcome =
   | "account-suspended"
   | "profile-claim-revoked";
 
-export interface Report {
+export interface RestrictedReportRecord {
   readonly id: string;
   readonly caseId: string;
   readonly reporterAccountId: string;
@@ -147,16 +157,30 @@ export type ReportReason =
   | "retaliation"
   | "other";
 
-export interface ModerationCase {
+interface ModerationCaseBase {
   readonly id: string;
   readonly targetId: string;
-  readonly state: ModerationCaseState;
   readonly queue: "ordinary" | "urgent";
   readonly reportIds: readonly string[];
-  readonly originalReviewerId?: string;
-  readonly enforcement?: EnforcementAction;
-  readonly appealDeadline?: Date;
 }
+
+export type RestrictedModerationCaseRecord =
+  | (ModerationCaseBase & {
+      readonly state: "received" | "triaged" | "investigating";
+    })
+  | (ModerationCaseBase & {
+      readonly state: "resolved" | "appealed";
+      readonly originalReviewerId: string;
+      readonly enforcement: EnforcementAction | null;
+      readonly appealDeadline: Date | null;
+    })
+  | (ModerationCaseBase & {
+      readonly state: "closed";
+      readonly closedFrom: Exclude<ModerationCaseState, "closed">;
+      readonly originalReviewerId: string | null;
+      readonly enforcement: EnforcementAction | null;
+      readonly appealDeadline: Date | null;
+    });
 
 export interface EnforcementAction {
   readonly outcome: EnforcementOutcome;
@@ -183,6 +207,14 @@ export interface AuditEvent {
   readonly priorState: string | null;
   readonly resultingState: string;
   readonly restrictedEvidenceReferences: readonly string[];
+}
+
+export interface AuthorizedDurableCommand {
+  readonly kind: "authorized-durable-command";
+  readonly decisionId: string;
+  readonly actorId: string;
+  readonly capability: string;
+  readonly policyVersion: string;
 }
 
 export type StaffRole = "support" | "moderator" | "identity-reviewer" | "legal";

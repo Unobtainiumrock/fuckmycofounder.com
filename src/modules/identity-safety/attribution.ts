@@ -102,6 +102,58 @@ export function projectAttribution(input: {
   );
 }
 
+type AttributionInput = Parameters<typeof projectAttribution>[0];
+
+export const publicResponseAttribution = (
+  input: AttributionInput,
+): {
+  readonly attribution: PublicAttributionProjection;
+} => ({ attribution: projectAttribution(input) });
+
+export const metadataAttribution = (
+  input: AttributionInput,
+): {
+  readonly author: PublicAttributionProjection;
+} => ({ author: projectAttribution(input) });
+
+export const ordinaryLogAttribution = (
+  input: AttributionInput,
+): {
+  readonly outcome: "rendered" | "withheld";
+} => ({
+  outcome:
+    projectAttribution(input).kind === "withheld" ? "withheld" : "rendered",
+});
+
+export const eventAttribution = (
+  input: AttributionInput,
+): {
+  readonly actor: PublicAttributionProjection;
+} => ({ actor: projectAttribution(input) });
+
+export const exportAttribution = (
+  input: AttributionInput,
+): {
+  readonly authoredAs: PublicAttributionProjection;
+} => ({ authoredAs: projectAttribution(input) });
+
+export const errorAttribution = (
+  input: AttributionInput,
+): {
+  readonly code: "attribution-unavailable" | "none";
+} => ({
+  code:
+    projectAttribution(input).kind === "withheld"
+      ? "attribution-unavailable"
+      : "none",
+});
+
+export const notificationAttribution = (
+  input: AttributionInput,
+): {
+  readonly actor: PublicAttributionProjection;
+} => ({ actor: projectAttribution(input) });
+
 export function restrictedAttribution(input: {
   readonly accountId: string;
   readonly caseReason: string;

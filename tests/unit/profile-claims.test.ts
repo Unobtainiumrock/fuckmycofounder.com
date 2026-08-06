@@ -72,6 +72,7 @@ describe("Profile Claim foundation", () => {
 
   it("keeps claim, Account, and byline states independent on revocation and appeal", () => {
     const verified = transitionProfileClaim(pending, "verified", now)!;
+    if (verified.state !== "verified") throw new Error("claim not verified");
     const byline: PublicByline = {
       accountId: account.id,
       displayName: "Ada Founder",
@@ -91,6 +92,7 @@ describe("Profile Claim foundation", () => {
 
   it("projects only claimed state and expires raw evidence after 90 days", () => {
     const verified = transitionProfileClaim(pending, "verified", now)!;
+    if (verified.state !== "verified") throw new Error("claim not verified");
     const projection = publicClaimProjection("profile-public", verified);
     expect(projection).toEqual({ profileId: "profile-public", claimed: true });
     expect(
@@ -105,13 +107,13 @@ describe("Profile Claim foundation", () => {
         {
           id: pending.id,
           category: "claim-evidence",
-          expiresAt: verified.evidenceExpiresAt!,
+          expiresAt: verified.evidenceExpiresAt,
           legalHold: false,
           appealActive: false,
           payloadPresent: true,
         },
       ],
-      verified.evidenceExpiresAt!,
+      verified.evidenceExpiresAt,
     );
     expect(result.records[0]?.payloadPresent).toBe(false);
   });

@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   createOrEditByline,
+  errorAttribution,
+  eventAttribution,
+  exportAttribution,
   linkVerifiedClaim,
+  metadataAttribution,
+  notificationAttribution,
+  ordinaryLogAttribution,
   projectAttribution,
+  publicResponseAttribution,
   publicBylineProjection,
   restrictedAttribution,
   type Account,
@@ -30,6 +37,9 @@ const claim: ProfileClaim = {
   profileId: "profile-public",
   state: "verified",
   evidenceKind: "human-review",
+  decidedAt: now,
+  appealDeadline: new Date("2026-09-04T12:00:00.000Z"),
+  evidenceExpiresAt: new Date("2026-11-03T12:00:00.000Z"),
 };
 
 describe("Public Bylines and attribution", () => {
@@ -107,15 +117,20 @@ describe("Public Bylines and attribution", () => {
       account,
       byline,
     });
+    const input = {
+      mode: "anonymous" as const,
+      available: true,
+      account,
+      byline,
+    };
     const surfaces = {
-      response: anonymous,
-      metadata: anonymous,
-      logs: { outcome: "rendered", attribution: anonymous },
-      events: [{ attribution: anonymous }],
-      export: { authored: [anonymous] },
-      errors: { code: "attribution-unavailable" },
-      notification: { actor: anonymous },
-      links: ["/reviews/review-public"],
+      response: publicResponseAttribution(input),
+      metadata: metadataAttribution(input),
+      logs: ordinaryLogAttribution(input),
+      events: eventAttribution(input),
+      export: exportAttribution(input),
+      errors: errorAttribution(input),
+      notification: notificationAttribution(input),
     };
     expect(anonymous).toEqual({
       kind: "anonymous",

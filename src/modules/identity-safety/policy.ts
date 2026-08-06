@@ -1,5 +1,6 @@
 import type {
   AuditEvent,
+  AuthorizedDurableCommand,
   PolicyContext,
   PolicyOutcome,
   StaffRole,
@@ -25,6 +26,27 @@ export function evaluatePolicy(context: PolicyContext): PolicyOutcome {
     return { kind: "deny", code: "action-not-available" };
   }
   return { kind: "allow", policyVersion: "identity-safety-v1" };
+}
+
+export function authorizeDurableCommand(input: {
+  readonly context: PolicyContext;
+  readonly decisionId: string;
+  readonly capability: string;
+}):
+  | AuthorizedDurableCommand
+  | Exclude<PolicyOutcome, { readonly kind: "allow" }> {
+  const decision = evaluatePolicy(input.context);
+  if (decision.kind !== "allow") return decision;
+  if (!input.context.account) {
+    return { kind: "deny", code: "action-not-available" };
+  }
+  return {
+    kind: "authorized-durable-command",
+    decisionId: input.decisionId,
+    actorId: input.context.account.id,
+    capability: input.capability,
+    policyVersion: decision.policyVersion,
+  };
 }
 
 export interface ProtectedActionTransaction {

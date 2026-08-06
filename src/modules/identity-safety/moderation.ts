@@ -2,9 +2,9 @@ import type {
   Account,
   EnforcementAction,
   EnforcementOutcome,
-  ModerationCase,
+  RestrictedModerationCaseRecord,
   ModerationCaseState,
-  Report,
+  RestrictedReportRecord,
   ReportReason,
 } from "./model";
 
@@ -34,8 +34,16 @@ export function blockApplies(input: {
 type ReportIntakeResult =
   | {
       readonly kind: "accepted";
-      readonly report: Report;
-      readonly moderationCase: ModerationCase;
+      readonly receipt: {
+        readonly caseId: string;
+        readonly state: ModerationCaseState;
+        readonly queue: "ordinary" | "urgent";
+      };
+      readonly restricted: {
+        readonly kind: "restricted-report-intake";
+        readonly report: RestrictedReportRecord;
+        readonly moderationCase: RestrictedModerationCaseRecord;
+      };
       readonly emergencyGuidance?: string;
     }
   | { readonly kind: "authentication-required" }
@@ -54,13 +62,17 @@ export function intakeReport(input: {
   readonly context?: string;
   readonly evidenceReferences: readonly string[];
   readonly createdAt: Date;
-  readonly existingCase?: ModerationCase;
+  readonly existingCase?: RestrictedModerationCaseRecord;
+  readonly restrictedProjectionAuthorized: boolean;
 }): ReportIntakeResult {
   if (!input.reporterAccount || input.reporterAccount.state !== "active") {
     return { kind: "authentication-required" };
   }
   if (input.existingCase?.state === "closed") {
     return { kind: "case-closed", retryable: false };
+  }
+  if (!input.restrictedProjectionAuthorized) {
+    return { kind: "authentication-required" };
   }
   if (!input.intakeAvailable) return { kind: "unavailable", retryable: true };
   if (!input.targetAvailable)
@@ -69,8 +81,12 @@ export function intakeReport(input: {
   const moderationCase = buildModerationCase(input);
   return {
     kind: "accepted",
-    report,
-    moderationCase,
+    receipt: {
+      caseId: moderationCase.id,
+      state: moderationCase.state,
+      queue: moderationCase.queue,
+    },
+    restricted: { kind: "restricted-report-intake", report, moderationCase },
     ...(moderationCase.queue === "urgent"
       ? {
           emergencyGuidance:
@@ -83,7 +99,7 @@ export function intakeReport(input: {
 function buildReport(
   input: Parameters<typeof intakeReport>[0],
   reporterAccountId: string,
-): Report {
+): RestrictedReportRecord {
   return {
     id: input.id,
     caseId: input.caseId,
@@ -98,12 +114,11 @@ function buildReport(
 
 function buildModerationCase(
   input: Parameters<typeof intakeReport>[0],
-): ModerationCase {
+): RestrictedModerationCaseRecord {
   const existingIds = input.existingCase?.reportIds ?? [];
-  return {
+  const fields = {
     id: input.caseId,
     targetId: input.targetId,
-    state: input.existingCase?.state ?? "received",
     queue:
       input.reason === "threat-or-imminent-harm"
         ? "urgent"
@@ -111,13 +126,15 @@ function buildModerationCase(
     reportIds: existingIds.includes(input.id)
       ? existingIds
       : [...existingIds, input.id],
-    ...(input.existingCase?.originalReviewerId
-      ? { originalReviewerId: input.existingCase.originalReviewerId }
-      : {}),
   };
+  return input.existingCase
+    ? { ...input.existingCase, ...fields }
+    : { ...fields, state: "received" };
 }
 
-export function reportStatusProjection(moderationCase: ModerationCase): {
+export function reportStatusProjection(
+  moderationCase: RestrictedModerationCaseRecord,
+): {
   readonly caseId: string;
   readonly state: ModerationCaseState;
   readonly queue: "ordinary" | "urgent";
@@ -143,22 +160,45 @@ const caseTransitions: Readonly<
 };
 
 export function transitionModerationCase(
-  moderationCase: ModerationCase,
+  moderationCase: RestrictedModerationCaseRecord,
   state: ModerationCaseState,
-): ModerationCase | null {
-  return caseTransitions[moderationCase.state].includes(state)
-    ? { ...moderationCase, state }
-    : null;
+): RestrictedModerationCaseRecord | null {
+  if (moderationCase.state === "closed") return null;
+  if (!caseTransitions[moderationCase.state].includes(state)) return null;
+  if (state === "closed") {
+    return {
+      ...moderationCase,
+      state,
+      closedFrom: moderationCase.state,
+      originalReviewerId:
+        "originalReviewerId" in moderationCase
+          ? moderationCase.originalReviewerId
+          : null,
+      enforcement:
+        "enforcement" in moderationCase ? moderationCase.enforcement : null,
+      appealDeadline:
+        "appealDeadline" in moderationCase
+          ? moderationCase.appealDeadline
+          : null,
+    };
+  }
+  if (
+    (state === "triaged" || state === "investigating") &&
+    (moderationCase.state === "received" || moderationCase.state === "triaged")
+  ) {
+    return { ...moderationCase, state };
+  }
+  return null;
 }
 
 export function applyEnforcement(input: {
-  readonly moderationCase: ModerationCase;
+  readonly moderationCase: RestrictedModerationCaseRecord;
   readonly reviewerId: string;
   readonly outcome: EnforcementOutcome;
   readonly policyReason: string;
   readonly effectiveAt: Date;
   readonly scopeOrDuration: string;
-}): ModerationCase | null {
+}): RestrictedModerationCaseRecord | null {
   if (input.moderationCase.state !== "investigating") return null;
   const enforcement: EnforcementAction = {
     outcome: input.outcome,
@@ -172,17 +212,17 @@ export function applyEnforcement(input: {
     state: "resolved",
     originalReviewerId: input.reviewerId,
     enforcement,
-    ...(enforcement.appealable
-      ? { appealDeadline: addDays(input.effectiveAt, 30) }
-      : {}),
+    appealDeadline: enforcement.appealable
+      ? addDays(input.effectiveAt, 30)
+      : null,
   };
 }
 
 export function appealCase(input: {
-  readonly moderationCase: ModerationCase;
+  readonly moderationCase: RestrictedModerationCaseRecord;
   readonly reviewerId: string;
   readonly now: Date;
-}): ModerationCase | null {
+}): RestrictedModerationCaseRecord | null {
   if (
     input.moderationCase.state !== "resolved" ||
     !input.moderationCase.enforcement?.appealable ||

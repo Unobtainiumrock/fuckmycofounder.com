@@ -17,17 +17,15 @@ type AuthenticationConfiguration = Partial<
   Readonly<Record<AuthenticationProvider, DeterministicMethod>>
 >;
 
-interface DeterministicAuthenticationAdapter {
+export function createDeterministicAuthenticationAdapter(
+  configuration: AuthenticationConfiguration,
+): {
   authenticate(input: {
     readonly provider: AuthenticationProvider;
     readonly proof: string;
     readonly intent: ProtectedIntent;
   }): Promise<AuthenticationResult>;
-}
-
-export function createDeterministicAuthenticationAdapter(
-  configuration: AuthenticationConfiguration,
-): DeterministicAuthenticationAdapter {
+} {
   return {
     authenticate(input): Promise<AuthenticationResult> {
       const method = configuration[input.provider];

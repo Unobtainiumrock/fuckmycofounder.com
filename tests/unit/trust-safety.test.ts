@@ -4,6 +4,7 @@ import {
   abuseDecision,
   appealCase,
   applyEnforcement,
+  authorizeDurableCommand,
   blockApplies,
   evaluatePolicy,
   intakeReport,
@@ -11,7 +12,7 @@ import {
   transitionModerationCase,
   type Account,
   type EnforcementOutcome,
-  type ModerationCase,
+  type RestrictedModerationCaseRecord,
   type ReportReason,
 } from "@/src/modules/identity-safety";
 import { findProjectionLeaks } from "@/tests/support/noninterference";
@@ -39,6 +40,27 @@ describe("centralized policy", () => {
     riskApproved: true,
     sensitive: false,
   } as const;
+
+  it("issues a named durable-command decision only after central policy allows", () => {
+    expect(
+      authorizeDurableCommand({
+        context: base,
+        decisionId: "decision-a",
+        capability: "report",
+      }),
+    ).toMatchObject({
+      kind: "authorized-durable-command",
+      actorId: "account-a",
+      policyVersion: "identity-safety-v1",
+    });
+    expect(
+      authorizeDurableCommand({
+        context: { ...base, account: null },
+        decisionId: "decision-b",
+        capability: "report",
+      }),
+    ).toEqual({ kind: "deny", code: "action-not-available" });
+  });
 
   it("returns allow, safe deny, explicit unmet requirement, and fail-closed unavailable", () => {
     expect(evaluatePolicy(base)).toEqual({
@@ -70,7 +92,7 @@ describe("centralized policy", () => {
     (state) => {
       const result = evaluatePolicy({
         ...base,
-        account: { ...account, state },
+        account: accountInState(state),
       });
       expect(result).toEqual({ kind: "deny", code: "action-not-available" });
       expect(JSON.stringify(result)).not.toContain(state);
@@ -119,6 +141,7 @@ describe("reports, moderation, enforcement, and appeals", () => {
     reason: "harassment" as const,
     evidenceReferences: ["restricted-evidence"],
     createdAt: now,
+    restrictedProjectionAuthorized: true,
   };
 
   it("requires an Account, deduplicates intake, and keeps reporter/evidence confidential", () => {
@@ -128,23 +151,28 @@ describe("reports, moderation, enforcement, and appeals", () => {
     const first = intakeReport(reportInput);
     expect(first).toMatchObject({
       kind: "accepted",
-      moderationCase: { state: "received", reportIds: ["report-secret"] },
+      restricted: {
+        moderationCase: { state: "received", reportIds: ["report-secret"] },
+      },
     });
     if (first.kind !== "accepted") throw new Error("report not accepted");
     const duplicate = intakeReport({
       ...reportInput,
-      existingCase: first.moderationCase,
+      existingCase: first.restricted.moderationCase,
     });
     expect(duplicate).toMatchObject({
-      moderationCase: { reportIds: ["report-secret"] },
+      restricted: { moderationCase: { reportIds: ["report-secret"] } },
     });
     expect(
       intakeReport({
         ...reportInput,
-        existingCase: { ...first.moderationCase, state: "closed" },
+        existingCase: transitionModerationCase(
+          first.restricted.moderationCase,
+          "closed",
+        )!,
       }),
     ).toEqual({ kind: "case-closed", retryable: false });
-    const status = reportStatusProjection(first.moderationCase);
+    const status = reportStatusProjection(first.restricted.moderationCase);
     expect(
       findProjectionLeaks(status, {
         forbiddenKeys: ["reporterAccountId", "evidenceReferences"],
@@ -160,7 +188,7 @@ describe("reports, moderation, enforcement, and appeals", () => {
     });
     expect(result.kind).toBe("accepted");
     if (result.kind !== "accepted") throw new Error("urgent report rejected");
-    expect(result.moderationCase.queue).toBe("urgent");
+    expect(result.receipt.queue).toBe("urgent");
     expect(result.emergencyGuidance).toContain("emergency services");
   });
 
@@ -175,7 +203,7 @@ describe("reports, moderation, enforcement, and appeals", () => {
   ] as const)(
     "keeps case state separate for %s enforcement",
     (outcome: EnforcementOutcome) => {
-      const investigating: ModerationCase = {
+      const investigating: RestrictedModerationCaseRecord = {
         id: "case-1",
         targetId: "object-1",
         state: "investigating",
@@ -199,7 +227,7 @@ describe("reports, moderation, enforcement, and appeals", () => {
   );
 
   it("requires a different appeal reviewer within 30 days and preserves original decision", () => {
-    const investigating: ModerationCase = {
+    const investigating: RestrictedModerationCaseRecord = {
       id: "case-1",
       targetId: "object-1",
       state: "investigating",
@@ -214,6 +242,7 @@ describe("reports, moderation, enforcement, and appeals", () => {
       effectiveAt: now,
       scopeOrDuration: "permanent",
     })!;
+    if (resolved.state !== "resolved") throw new Error("case not resolved");
     expect(
       appealCase({ moderationCase: resolved, reviewerId: "moderator-a", now }),
     ).toBeNull();
@@ -252,3 +281,23 @@ describe("reports, moderation, enforcement, and appeals", () => {
     });
   });
 });
+
+function accountInState(state: Account["state"]): Account {
+  if (state === "deletion-pending") {
+    return {
+      ...account,
+      state,
+      preDeletionState: "active",
+      deletionRequestedAt: now,
+    };
+  }
+  if (state === "deleted") {
+    return {
+      ...account,
+      state,
+      identityErasureDueAt: now,
+      backupErasureDueAt: now,
+    };
+  }
+  return { ...account, state };
+}

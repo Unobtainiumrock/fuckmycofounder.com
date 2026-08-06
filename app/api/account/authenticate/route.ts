@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import type { AuthenticationProvider } from "@/src/modules/identity-safety";
+import {
+  authenticateProtectedIntent,
+  type AuthenticationProvider,
+} from "@/src/modules/identity-safety";
 import { createDeterministicAuthenticationAdapter } from "@/src/platform/auth/deterministic-auth";
 
 const requestSchema = z.object({
@@ -24,23 +27,26 @@ export async function POST(request: Request): Promise<NextResponse> {
   const parsed = requestSchema.safeParse(
     await request.json().catch(() => null),
   );
-  if (!parsed.success || parsed.data.intent.returnPath.startsWith("//")) {
+  if (!parsed.success) {
     return NextResponse.json(
       { code: "invalid-request", retryable: false },
       { status: 400 },
     );
   }
-  const result = await disabled.authenticate({
-    provider: parsed.data.provider,
-    proof: parsed.data.proof,
-    intent: {
-      action: parsed.data.intent.action,
-      returnPath: parsed.data.intent.returnPath,
-      ...(parsed.data.intent.draftReference
-        ? { draftReference: parsed.data.intent.draftReference }
-        : {}),
+  const result = await authenticateProtectedIntent(
+    {
+      provider: parsed.data.provider,
+      proof: parsed.data.proof,
+      intent: {
+        action: parsed.data.intent.action,
+        returnPath: parsed.data.intent.returnPath,
+        ...(parsed.data.intent.draftReference
+          ? { draftReference: parsed.data.intent.draftReference }
+          : {}),
+      },
     },
-  });
+    (input) => disabled.authenticate(input),
+  );
   return NextResponse.json(result, { status: 503 });
 }
 

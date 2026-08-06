@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountExport,
   accountTransitionEffects,
+  authenticateProtectedIntent,
   cancelDeletion,
   capabilitiesFor,
   completeReviewedRecovery,
@@ -11,6 +12,7 @@ import {
   deletionConsequences,
   finalizeExpiredDeletion,
   linkAuthenticationMethod,
+  isSafeLocalReturnPath,
   recoveryResponse,
   reauthenticationIsRecent,
   transitionAccount,
@@ -124,6 +126,30 @@ describe("Account authentication and lifecycle", () => {
     expect(
       reauthenticationIsRecent(now, new Date(now.getTime() + 16 * 60_000)),
     ).toBe(false);
+    expect(
+      reauthenticationIsRecent(new Date(now.getTime() + 60_000), now),
+    ).toBe(false);
+  });
+
+  it("validates local protected-intent return paths before calling auth", async () => {
+    expect(isSafeLocalReturnPath("/reports/new")).toBe(true);
+    expect(isSafeLocalReturnPath("//evil.test")).toBe(false);
+    expect(isSafeLocalReturnPath("/\\evil.test")).toBe(false);
+    await expect(
+      authenticateProtectedIntent(
+        {
+          provider: "google",
+          proof: "proof",
+          intent: { ...intent, returnPath: "/\\evil.test" },
+        },
+        () =>
+          Promise.resolve({ kind: "retry", intent, code: "method-disabled" }),
+      ),
+    ).resolves.toEqual({
+      kind: "retry",
+      intent: { ...intent, returnPath: "/" },
+      code: "invalid-or-expired",
+    });
   });
 
   it.each([
@@ -134,7 +160,7 @@ describe("Account authentication and lifecycle", () => {
     ["deleted", false],
   ] as const)("applies the %s capability matrix", (state, mayAct) => {
     expect(
-      capabilitiesFor({ ...active, state }).includes("protected-action"),
+      capabilitiesFor(accountInState(state)).includes("protected-action"),
     ).toBe(mayAct);
     expect(
       accountTransitionEffects("active", state).ordinaryCapabilitiesDisabled,
@@ -173,6 +199,8 @@ describe("Account authentication and lifecycle", () => {
       account: active,
       methods: [method],
       byline: { displayName: "Ada Founder" },
+      requesterAccountId: active.id,
+      recentReauthentication: true,
     });
     expect(exported).toMatchObject({
       account: { id: "account-a", state: "active" },
@@ -183,5 +211,34 @@ describe("Account authentication and lifecycle", () => {
         forbiddenValues: ["account-other"],
       }),
     ).toEqual([]);
+    expect(
+      accountExport({
+        account: active,
+        methods: [method],
+        byline: null,
+        requesterAccountId: "account-other",
+        recentReauthentication: true,
+      }),
+    ).toEqual({ kind: "not-authorized" });
   });
 });
+
+function accountInState(state: Account["state"]): Account {
+  if (state === "deletion-pending") {
+    return {
+      ...active,
+      state,
+      preDeletionState: "active",
+      deletionRequestedAt: now,
+    };
+  }
+  if (state === "deleted") {
+    return {
+      ...active,
+      state,
+      identityErasureDueAt: now,
+      backupErasureDueAt: now,
+    };
+  }
+  return { ...active, state };
+}

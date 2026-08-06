@@ -56,18 +56,19 @@ export function transitionProfileClaim(
   now: Date,
 ): ProfileClaim | null {
   if (!claimTransitions[claim.state].includes(state)) return null;
-  const final =
-    state === "verified" || state === "rejected" || state === "revoked";
+  const base = {
+    id: claim.id,
+    accountId: claim.accountId,
+    profileId: claim.profileId,
+    evidenceKind: claim.evidenceKind,
+  } as const;
+  if (state === "pending") return { ...base, state };
   return {
-    ...claim,
+    ...base,
     state,
-    ...(final
-      ? {
-          decidedAt: now,
-          appealDeadline: addDays(now, 30),
-          evidenceExpiresAt: addDays(now, 90),
-        }
-      : {}),
+    decidedAt: now,
+    appealDeadline: addDays(now, 30),
+    evidenceExpiresAt: addDays(now, 90),
   };
 }
 
@@ -76,9 +77,11 @@ export function claimNotice(claim: ProfileClaim): {
   readonly appealDeadline?: Date;
   readonly message: string;
 } {
+  const deadline =
+    claim.state === "pending" ? {} : { appealDeadline: claim.appealDeadline };
   return {
     state: claim.state,
-    ...(claim.appealDeadline ? { appealDeadline: claim.appealDeadline } : {}),
+    ...deadline,
     message:
       claim.state === "verified"
         ? "Profile Claim verified."

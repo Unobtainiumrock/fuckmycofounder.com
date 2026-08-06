@@ -57,6 +57,45 @@ export function completeAuthentication(
   };
 }
 
+export async function authenticateProtectedIntent(
+  input: {
+    readonly provider: AuthenticationProvider;
+    readonly proof: string;
+    readonly intent: ProtectedIntent;
+  },
+  authenticate: (input: {
+    readonly provider: AuthenticationProvider;
+    readonly proof: string;
+    readonly intent: ProtectedIntent;
+  }) => Promise<AuthenticationResult>,
+): Promise<AuthenticationResult> {
+  if (!isSafeLocalReturnPath(input.intent.returnPath)) {
+    return {
+      kind: "retry",
+      intent: { ...input.intent, returnPath: "/" },
+      code: "invalid-or-expired",
+    };
+  }
+  return authenticate(input);
+}
+
+export function isSafeLocalReturnPath(value: string): boolean {
+  if (
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\")
+  ) {
+    return false;
+  }
+  try {
+    return (
+      new URL(value, "https://local.invalid").origin === "https://local.invalid"
+    );
+  } catch {
+    return false;
+  }
+}
+
 type MethodLinkResult =
   | {
       readonly kind: "linked";
@@ -158,7 +197,18 @@ export function transitionAccount(
       backupErasureDueAt: addDays(now, 90),
     };
   }
-  return { ...account, state: nextState };
+  if (
+    nextState === "active" ||
+    nextState === "limited" ||
+    nextState === "suspended"
+  ) {
+    return {
+      id: account.id,
+      verifiedContact: account.verifiedContact,
+      state: nextState,
+    };
+  }
+  return null;
 }
 
 export function accountTransitionEffects(
@@ -204,12 +254,11 @@ export function cancelDeletion(account: Account, now: Date): Account | null {
   ) {
     return null;
   }
-  const {
-    deletionRequestedAt: _deletionRequestedAt,
-    preDeletionState,
-    ...rest
-  } = account;
-  return { ...rest, state: preDeletionState ?? "active" };
+  return {
+    id: account.id,
+    verifiedContact: account.verifiedContact,
+    state: account.preDeletionState,
+  };
 }
 
 export function finalizeExpiredDeletion(
@@ -249,7 +298,15 @@ export function accountExport(input: {
   readonly account: Account;
   readonly methods: readonly AuthenticationMethod[];
   readonly byline: { readonly displayName: string } | null;
-}): AccountExportProjection {
+  readonly requesterAccountId: string;
+  readonly recentReauthentication: boolean;
+}): AccountExportProjection | { readonly kind: "not-authorized" } {
+  if (
+    input.requesterAccountId !== input.account.id ||
+    !input.recentReauthentication
+  ) {
+    return { kind: "not-authorized" };
+  }
   return {
     account: { id: input.account.id, state: input.account.state },
     authenticationMethods: input.methods.map(({ provider, verifiedAt }) => ({
@@ -288,9 +345,8 @@ export function reauthenticationIsRecent(
   now: Date,
   maximumAgeMinutes = 15,
 ): boolean {
-  return (
-    now.getTime() - authenticatedAt.getTime() <= maximumAgeMinutes * 60_000
-  );
+  const age = now.getTime() - authenticatedAt.getTime();
+  return age >= 0 && age <= maximumAgeMinutes * 60_000;
 }
 
 function addDays(date: Date, days: number): Date {
