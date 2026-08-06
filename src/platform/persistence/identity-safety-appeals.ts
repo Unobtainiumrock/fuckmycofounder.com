@@ -83,7 +83,12 @@ export async function persistClaimAppeal(input: {
         "Profile Claim appeal received; the current decision remains effective.",
       now: input.now,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "profile-claim-appeal",
+      priorState: requiredString(claim.state, "profile_claims.state"),
+      resultingState: "appealed",
+    });
     return "committed" as const;
   });
 }
@@ -108,7 +113,7 @@ export async function persistClaimAppealDecision(input: {
   });
   return input.runner.run(input.audit.id, async (tx) => {
     const result = await tx.query<Record<string, unknown>>(
-      `select ca.claim_id,ca.appellant_account_id,ca.reviewer_id,ca.state
+      `select ca.claim_id,ca.appellant_account_id,ca.reviewer_id,ca.state,pc.state claim_state
        from claim_appeals ca join profile_claims pc on pc.id=ca.claim_id
        where ca.id=$1 for update of ca,pc`,
       [input.appealId],
@@ -166,7 +171,13 @@ export async function persistClaimAppealDecision(input: {
       message: `${input.reasonCode}: Profile Claim ${input.resultingState}.`,
       now: input.now,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "profile-claim-appeal-decision",
+      reasonCode: input.reasonCode,
+      priorState: requiredString(appeal.claim_state, "profile_claims.state"),
+      resultingState: input.resultingState,
+    });
     return "committed" as const;
   });
 }
@@ -234,7 +245,12 @@ export async function persistAppeal(input: {
     await tx.query("update reports set appeal_active=true where case_id=$1", [
       input.caseId,
     ]);
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "moderation-appeal",
+      priorState: "resolved",
+      resultingState: "appealed",
+    });
     return "committed" as const;
   });
 }
@@ -309,7 +325,13 @@ export async function persistAppealDecision(input: {
       message: `Target ${target.targetId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}.`,
       now: input.action.effectiveAt,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "moderation-appeal-decision",
+      reasonCode: input.action.policyReason,
+      priorState: "appealed",
+      resultingState: "resolved",
+    });
     return "committed" as const;
   });
 }

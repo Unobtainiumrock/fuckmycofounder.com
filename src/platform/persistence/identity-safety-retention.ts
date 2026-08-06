@@ -65,7 +65,13 @@ export async function runDurableRetention(input: {
       [input.now],
     );
     if (auditEvidence.rowCount) completed.push("audit-evidence");
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "retention-run",
+      priorState: null,
+      resultingState:
+        completed.length === 0 ? "no-expired-data" : "expired-data-minimized",
+    });
   });
   return completed;
 }
@@ -132,7 +138,13 @@ export async function persistLegalHold(input: {
       ]);
       await setScopedHold(tx, input.scopeKind, input.scopeId, false);
     }
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: `legal-hold-${input.operation}`,
+      reasonCode: input.reason,
+      priorState: input.operation === "apply" ? "unheld" : "held",
+      resultingState: input.operation === "apply" ? "held" : "released",
+    });
     return "committed" as const;
   });
 }

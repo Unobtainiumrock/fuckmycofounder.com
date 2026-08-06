@@ -25,6 +25,12 @@ export interface AuthorizedDurableCommand {
   readonly purpose?: string;
 }
 
+interface DurableCommandAuditIdentity {
+  readonly actorRole: CommandActorRole;
+  readonly action: string;
+  readonly policyVersion: string;
+}
+
 export type CommandActorRole =
   | "account"
   | StaffRole
@@ -42,6 +48,17 @@ interface VerifiedStaffActor {
 
 const issuedDurableCommands = new WeakSet<object>();
 const issuedStaffActors = new WeakSet<object>();
+
+export function durableCommandAuditIdentity(
+  authorization: AuthorizedDurableCommand,
+): DurableCommandAuditIdentity | null {
+  if (!issuedDurableCommands.has(authorization)) return null;
+  return {
+    actorRole: authorization.actorRole,
+    action: authorization.action,
+    policyVersion: authorization.policyVersion,
+  };
+}
 
 function issueDurableCommand(
   input: Omit<AuthorizedDurableCommand, typeof authorizedDurableCommandBrand>,
@@ -99,6 +116,13 @@ export function authorizeDurableCommand(input: {
   if (!accountCommandAllowed(input.context.action, input.capability)) {
     return { kind: "deny", code: "action-not-available" };
   }
+  if (
+    accountSelfTargetRequired(input.context.action) &&
+    (input.targetKind !== "account" ||
+      input.targetId !== input.context.account.id)
+  ) {
+    return { kind: "deny", code: "action-not-available" };
+  }
   return issueDurableCommand({
     kind: "authorized-durable-command",
     decisionId: input.decisionId,
@@ -110,6 +134,18 @@ export function authorizeDurableCommand(input: {
     targetId: input.targetId,
     policyVersion: decision.policyVersion,
   });
+}
+
+function accountSelfTargetRequired(action: string): boolean {
+  return new Set([
+    "account-export",
+    "add-authentication-method",
+    "remove-authentication-method",
+    "correct-authentication-method",
+    "request-deletion",
+    "cancel-deletion",
+    "reverify-recovery-contact",
+  ]).has(action);
 }
 
 export function authorizeStaffIdentityProof(input: {

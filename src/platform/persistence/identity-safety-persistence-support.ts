@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  durableCommandAuditIdentity,
   matchesAuthorizedDurableCommand,
   type AuditEvent,
   type AuthorizedDurableCommand,
@@ -44,19 +45,29 @@ export async function writeNotice(
 export async function writeAudit(
   tx: TransactionContext,
   event: AuditEvent,
+  input: {
+    readonly authorization: AuthorizedDurableCommand;
+    readonly action: string;
+    readonly reasonCode?: string;
+    readonly priorState: string | null;
+    readonly resultingState: string;
+  },
 ): Promise<void> {
+  const identity = durableCommandAuditIdentity(input.authorization);
+  if (!identity || identity.action !== input.action)
+    throw new Error("Audit transition authorization does not match command");
   await tx.query(
     `insert into identity_safety_audit (id,category,actor_role,occurred_at,reason_code,policy_version,prior_state,resulting_state,restricted_evidence_references)
      values ($1,$2,$3,$4,$5,$6,$7,$8,'[]'::jsonb)`,
     [
       event.id,
       event.category,
-      event.actorRole,
+      identity.actorRole,
       event.occurredAt,
-      event.reasonCode,
-      event.policyVersion,
-      event.priorState,
-      event.resultingState,
+      input.reasonCode ?? identity.action,
+      identity.policyVersion,
+      input.priorState,
+      input.resultingState,
     ],
   );
   if (event.restrictedEvidenceReferences.length > 0) {

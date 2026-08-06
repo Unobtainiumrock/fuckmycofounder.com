@@ -158,6 +158,18 @@ describe("centralized policy", () => {
     },
   );
 
+  it("does not issue an Account lifecycle capability for another Account", () => {
+    expect(
+      authorizeDurableCommand({
+        context: { ...base, action: "request-deletion" },
+        decisionId: "cross-account-deletion",
+        capability: "account.lifecycle",
+        targetKind: "account",
+        targetId: other.id,
+      }),
+    ).toEqual({ kind: "deny", code: "action-not-available" });
+  });
+
   it("does not let an ordinary Account mint privileged commands", () => {
     expect(
       authorizeDurableCommand({
@@ -420,35 +432,36 @@ describe("reports, moderation, enforcement, and appeals", () => {
     "impersonation",
     "harassment",
     "private-contact-information",
+    "sexual-exploitation",
+    "threat-or-imminent-harm",
     "spam",
     "evasion",
     "brigading",
     "retaliation",
-  ] as ReportReason[])("applies auditable abuse controls for %s", (reason) => {
+  ] as ReportReason[])(
+    "withholds every prohibited conduct signal without waiting for volume: %s",
+    (reason) => {
+      expect(
+        abuseDecision({ reason, attempts: 1, coordinatedAccounts: 1 }),
+      ).toEqual({
+        allowed: false,
+        reasonCode: `conduct:${reason}`,
+      });
+    },
+  );
+
+  it("applies generic volume controls to unclassified risk signals", () => {
     expect(
-      abuseDecision({ reason, attempts: 6, coordinatedAccounts: 1 }),
+      abuseDecision({ reason: "other", attempts: 6, coordinatedAccounts: 1 }),
     ).toEqual({
       allowed: false,
-      reasonCode: `rate-limit:${reason}`,
+      reasonCode: "rate-limit:other",
     });
     expect(
-      abuseDecision({ reason, attempts: 1, coordinatedAccounts: 3 }),
+      abuseDecision({ reason: "other", attempts: 1, coordinatedAccounts: 3 }),
     ).toEqual({
       allowed: false,
       reasonCode: "coordinated-abuse",
-    });
-  });
-
-  it("routes sexual exploitation for review without waiting for a rate threshold", () => {
-    expect(
-      abuseDecision({
-        reason: "sexual-exploitation",
-        attempts: 1,
-        coordinatedAccounts: 1,
-      }),
-    ).toEqual({
-      allowed: false,
-      reasonCode: "conduct:sexual-exploitation",
     });
   });
 });

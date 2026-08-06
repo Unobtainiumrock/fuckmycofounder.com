@@ -10,6 +10,7 @@ import type {
 } from "../../modules/identity-safety/server";
 import {
   addDays,
+  hasRecentReauthentication,
   requireAuthorization,
   requiredBoolean,
   requiredDate,
@@ -83,7 +84,18 @@ export async function persistAuthenticatedAccount(input: {
       "insert into account_sessions (id,account_id,reauthenticated_at) values ($1,$2,$3)",
       [input.sessionId, input.account.id, input.method.verifiedAt],
     );
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "account-authenticate",
+      priorState:
+        typeof existingAccount.rows[0]?.state === "string"
+          ? existingAccount.rows[0].state
+          : null,
+      resultingState:
+        typeof existingAccount.rows[0]?.state === "string"
+          ? existingAccount.rows[0].state
+          : "active",
+    });
     return "committed" as const;
   });
 }
@@ -108,7 +120,7 @@ export async function persistAccountLifecycle(input: {
   readonly actorId: string;
   readonly accountId: string;
   readonly operation: LifecycleOperation;
-  readonly recentReauthentication: boolean;
+  readonly sessionId?: string;
   readonly now: Date;
   readonly audit: AuditEvent;
 }): Promise<
@@ -121,13 +133,11 @@ export async function persistAccountLifecycle(input: {
     targetKind: "account",
     targetId: input.accountId,
   });
-  if (
-    (input.operation === "request-deletion" ||
-      input.operation === "cancel-deletion") &&
-    !input.recentReauthentication
-  ) {
-    return "reauthentication-required";
-  }
+  const accountOwned =
+    input.operation === "request-deletion" ||
+    input.operation === "cancel-deletion";
+  if (accountOwned && input.actorId !== input.accountId)
+    throw new Error("Account lifecycle actor must match target Account");
   return input.runner.run(input.audit.id, async (tx) => {
     const result = await tx.query<Record<string, unknown>>(
       "select state,deletion_requested_at,pre_deletion_state from accounts where id=$1 for update",
@@ -135,10 +145,29 @@ export async function persistAccountLifecycle(input: {
     );
     const row = result.rows[0];
     if (!row) return "invalid-transition" as const;
+    if (
+      accountOwned &&
+      (!input.sessionId ||
+        !(await hasRecentReauthentication(tx, {
+          accountId: input.accountId,
+          sessionId: input.sessionId,
+          now: input.now,
+        })))
+    )
+      return "reauthentication-required" as const;
     const state = accountState(row.state);
     const outcome = await applyLifecycleOperation(tx, input, row, state);
     if (outcome !== "committed") return outcome;
-    await writeAudit(tx, input.audit);
+    const resulting = await tx.query<Record<string, unknown>>(
+      "select state from accounts where id=$1",
+      [input.accountId],
+    );
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: input.operation,
+      priorState: state,
+      resultingState: accountState(resulting.rows[0]?.state),
+    });
     return "committed" as const;
   });
 }
@@ -163,6 +192,7 @@ export async function persistRecoveryDecision(input: {
     targetId: input.recoveryId,
   });
   return input.runner.run(input.audit.id, async (tx) => {
+    let priorState: string | null = null;
     if (input.state === "pending") {
       if (!input.holdUntil) return "ineligible" as const;
       await tx.query(
@@ -182,6 +212,7 @@ export async function persistRecoveryDecision(input: {
       );
       const row = result.rows[0];
       if (!row || row.state !== "pending") return "ineligible" as const;
+      priorState = "pending";
       const accountId =
         row.account_id === null
           ? null
@@ -226,7 +257,12 @@ export async function persistRecoveryDecision(input: {
         });
       }
     }
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: `recovery-${input.state}`,
+      priorState,
+      resultingState: input.state,
+    });
     return "committed" as const;
   });
 }
@@ -235,7 +271,7 @@ export async function persistAuthenticationMethodChange(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
   readonly accountId: string;
-  readonly recentReauthentication: boolean;
+  readonly sessionId: string;
   readonly operation: "add" | "remove" | "correct";
   readonly method: {
     readonly id: string;
@@ -246,7 +282,11 @@ export async function persistAuthenticationMethodChange(input: {
   readonly replacedMethodId?: string;
   readonly audit: AuditEvent;
 }): Promise<
-  "committed" | "last-method" | "method-not-found" | "reauthentication-required"
+  | "committed"
+  | "last-method"
+  | "method-not-found"
+  | "reauthentication-required"
+  | "account-ineligible"
 > {
   requireAuthorization(input.authorization, {
     actorId: input.accountId,
@@ -255,11 +295,27 @@ export async function persistAuthenticationMethodChange(input: {
     targetKind: "account",
     targetId: input.accountId,
   });
-  if (!input.recentReauthentication) return "reauthentication-required";
   return input.runner.run(input.audit.id, async (tx) => {
     await tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
       input.accountId,
     ]);
+    const account = await tx.query<Record<string, unknown>>(
+      "select state,verified_contact from accounts where id=$1 for update",
+      [input.accountId],
+    );
+    if (
+      account.rows[0]?.state !== "active" ||
+      account.rows[0]?.verified_contact !== true
+    )
+      return "account-ineligible" as const;
+    if (
+      !(await hasRecentReauthentication(tx, {
+        accountId: input.accountId,
+        sessionId: input.sessionId,
+        now: input.audit.occurredAt,
+      }))
+    )
+      return "reauthentication-required" as const;
     if (input.operation === "remove") {
       const count = await tx.query<Record<string, unknown>>(
         "select count(*)::int as count,bool_or(id=$2) as target_exists from authentication_methods where account_id=$1",
@@ -300,79 +356,13 @@ export async function persistAuthenticationMethodChange(input: {
       message: "A sign-in method changed on your Account.",
       now: input.audit.occurredAt,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: `${input.operation}-authentication-method`,
+      priorState: "active",
+      resultingState: "active",
+    });
     return "committed" as const;
-  });
-}
-
-export async function loadAuthorizedAccountData(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly accountId: string;
-  readonly requesterAccountId: string;
-  readonly recentReauthentication: boolean;
-  readonly audit: AuditEvent;
-}): Promise<
-  | { readonly kind: "not-authorized" }
-  | {
-      readonly kind: "account-self-restricted";
-      readonly account: {
-        readonly id: string;
-        readonly state: AccountState;
-        readonly verifiedContact: boolean;
-      };
-      readonly methods: readonly {
-        readonly provider: string;
-        readonly verifiedAt: Date;
-      }[];
-    }
-> {
-  requireAuthorization(input.authorization, {
-    actorId: input.requesterAccountId,
-    action: "account-export",
-    capability: "account.export",
-    targetKind: "account",
-    targetId: input.accountId,
-  });
-  if (
-    input.accountId !== input.requesterAccountId ||
-    !input.recentReauthentication
-  )
-    return { kind: "not-authorized" };
-  return input.runner.run(input.audit.id, async (tx) => {
-    const accountResult = await tx.query<Record<string, unknown>>(
-      "select id,state,verified_contact from accounts where id=$1",
-      [input.accountId],
-    );
-    const methodResult = await tx.query<Record<string, unknown>>(
-      "select provider,verified_at from authentication_methods where account_id=$1 order by provider",
-      [input.accountId],
-    );
-    const row = accountResult.rows[0];
-    if (!row) return { kind: "not-authorized" as const };
-    const projection = {
-      kind: "account-self-restricted" as const,
-      account: {
-        id: requiredString(row.id, "accounts.id"),
-        state: accountState(row.state),
-        verifiedContact: requiredBoolean(
-          row.verified_contact,
-          "accounts.verified_contact",
-        ),
-      },
-      methods: methodResult.rows.map((method) => ({
-        provider: requiredString(
-          method.provider,
-          "authentication_methods.provider",
-        ),
-        verifiedAt: requiredDate(
-          method.verified_at,
-          "authentication_methods.verified_at",
-        ),
-      })),
-    };
-    await writeAudit(tx, input.audit);
-    return projection;
   });
 }
 
@@ -422,7 +412,12 @@ export async function finalizePrivateIdentityErasure(input: {
       "update accounts set verified_contact=false where id=$1 and state='deleted'",
       [input.accountId],
     );
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "erase-private-identity",
+      priorState: "deleted",
+      resultingState: "private-identity-erased",
+    });
     return "committed" as const;
   });
 }

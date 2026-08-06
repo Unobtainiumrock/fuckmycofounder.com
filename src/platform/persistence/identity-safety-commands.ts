@@ -53,20 +53,22 @@ export async function persistReportAndCase(input: {
     input.targetSnapshot,
     input.report.targetId,
   );
+  const requiredQueue =
+    input.report.reason === "threat-or-imminent-harm" ? "urgent" : "ordinary";
   return input.runner.run(input.audit.id, async (tx) => {
     const reporter = await tx.query<Record<string, unknown>>(
       "select state from accounts where id=$1 for update",
       [input.actorId],
     );
     if (reporter.rows[0]?.state !== "active") return "ineligible" as const;
-    await tx.query(
+    const createdCase = await tx.query(
       `insert into moderation_cases (id,target_id,state,queue,target_snapshot,created_at,evidence_expires_at,affected_account_id,affected_claim_id) values ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9)
        on conflict (id) do nothing`,
       [
         input.moderationCase.id,
         input.moderationCase.targetId,
         input.moderationCase.state,
-        input.moderationCase.queue,
+        requiredQueue,
         targetSnapshot,
         input.report.createdAt,
         null,
@@ -75,18 +77,16 @@ export async function persistReportAndCase(input: {
       ],
     );
     const canonicalCase = await tx.query<Record<string, unknown>>(
-      "select target_id,affected_account_id,affected_claim_id,state from moderation_cases where id=$1 for update",
+      "select target_id,affected_account_id,affected_claim_id,state,queue from moderation_cases where id=$1 for update",
       [input.moderationCase.id],
     );
     const caseRow = canonicalCase.rows[0];
-    if (
-      !caseRow ||
-      caseRow.target_id !== input.report.targetId ||
-      caseRow.affected_account_id !== input.targetAccountId ||
-      (caseRow.affected_claim_id ?? null) !== (input.targetClaimId ?? null) ||
-      caseRow.state === "closed"
-    )
-      return "ineligible" as const;
+    if (!caseAcceptsReport(caseRow, input)) return "ineligible" as const;
+    if (requiredQueue === "urgent" && caseRow.queue !== "urgent") {
+      await tx.query("update moderation_cases set queue='urgent' where id=$1", [
+        input.moderationCase.id,
+      ]);
+    }
     await tx.query(
       `insert into reports (id,case_id,reporter_account_id,target_id,reason,private_context,evidence_references,created_at,expires_at)
        values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) on conflict (case_id,reporter_account_id,target_id,reason) do nothing`,
@@ -102,9 +102,32 @@ export async function persistReportAndCase(input: {
         null,
       ],
     );
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "report-create",
+      reasonCode: `report:${input.report.reason}`,
+      priorState:
+        createdCase.rowCount === 1 || typeof caseRow.state !== "string"
+          ? null
+          : caseRow.state,
+      resultingState:
+        typeof caseRow.state === "string" ? caseRow.state : "received",
+    });
     return "committed" as const;
   });
+}
+
+function caseAcceptsReport(
+  row: Record<string, unknown> | undefined,
+  input: Parameters<typeof persistReportAndCase>[0],
+): row is Record<string, unknown> {
+  return Boolean(
+    row &&
+      row.target_id === input.report.targetId &&
+      row.affected_account_id === input.targetAccountId &&
+      (row.affected_claim_id ?? null) === (input.targetClaimId ?? null) &&
+      row.state !== "closed",
+  );
 }
 
 export async function persistEnforcement(input: {
@@ -167,7 +190,13 @@ export async function persistEnforcement(input: {
       message: `Target ${input.targetId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}; appeal ${input.action.appealable ? "available for 30 days" : "not available"}.`,
       now: input.action.effectiveAt,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "moderation-enforce",
+      reasonCode: input.action.policyReason,
+      priorState: "investigating",
+      resultingState: "resolved",
+    });
     return "committed" as const;
   });
 }
@@ -300,7 +329,13 @@ export async function recordRestrictedReveal(input: {
     );
     if (!linkage.rows[0])
       throw new Error("Restricted reveal linkage is unavailable");
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "restricted-reveal",
+      reasonCode: input.caseReason,
+      priorState: null,
+      resultingState: "revealed",
+    });
     await tx.query(
       "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,linkage_id,allowed,audit_id,created_at) values ($1,$2,$3,$4,$5,$6,true,$7,$8)",
       [
@@ -352,7 +387,13 @@ export async function recordAuditMutationAttempt(input: {
         throw error;
     }
     await tx.query("release savepoint rejected_audit_mutation");
-    await writeAudit(tx, input.event);
+    await writeAudit(tx, input.event, {
+      authorization: input.authorization,
+      action: "audit-mutation-attempt",
+      reasonCode: "audit-mutation-denied",
+      priorState: "immutable",
+      resultingState: "mutation-denied",
+    });
   });
 }
 
@@ -403,7 +444,13 @@ export async function loadRestrictedAttributionProjection(input: {
       revealId: input.revealId,
       auditId: requiredString(row.audit_id, "restricted_reveals.audit_id"),
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "restricted-reveal-project",
+      reasonCode: input.caseReason,
+      priorState: "revealed",
+      resultingState: "projected",
+    });
     return { kind: "restricted" as const, ...projection };
   });
 }
@@ -418,12 +465,12 @@ export { persistProfileClaim } from "./identity-safety-claim-commands";
 
 export {
   finalizePrivateIdentityErasure,
-  loadAuthorizedAccountData,
   persistAccountLifecycle,
   persistAuthenticatedAccount,
   persistAuthenticationMethodChange,
   persistRecoveryDecision,
 } from "./identity-safety-account-commands";
+export { loadAuthorizedAccountData } from "./identity-safety-account-export";
 export { persistRecoveryReverification } from "./identity-safety-reverification-commands";
 export {
   persistAccountBlock,

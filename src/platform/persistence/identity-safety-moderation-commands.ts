@@ -64,7 +64,12 @@ export async function persistModerationCaseTransition(input: {
         addDays(input.now, 730),
       ]);
     }
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: `moderation-${input.operation}`,
+      priorState: typeof state === "string" ? state : null,
+      resultingState: next,
+    });
     return "committed" as const;
   });
 }
@@ -142,7 +147,13 @@ export async function persistAbuseRiskReview(input: {
         input.now,
       ],
     );
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "abuse-risk-review",
+      reasonCode: decision.reasonCode,
+      priorState: null,
+      resultingState: decision.allowed ? "allowed" : "review-required",
+    });
     return { ...decision, caseId: routedCaseId };
   });
 }

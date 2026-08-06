@@ -87,7 +87,12 @@ export async function persistRecoveryReverification(input: {
           : "Your Profile Claim authority was re-verified after recovery.",
       now: input.audit.occurredAt,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: `reverify-recovery-${input.operation}`,
+      priorState: "reverification-required",
+      resultingState: "verified",
+    });
     return "committed" as const;
   });
 }

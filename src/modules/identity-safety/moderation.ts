@@ -265,8 +265,8 @@ export function abuseDecision(input: {
   readonly attempts: number;
   readonly coordinatedAccounts: number;
 }): { readonly allowed: boolean; readonly reasonCode: string } {
-  if (input.reason === "sexual-exploitation") {
-    return { allowed: false, reasonCode: "conduct:sexual-exploitation" };
+  if (input.reason !== "other") {
+    return { allowed: false, reasonCode: `conduct:${input.reason}` };
   }
   const rateLimited = input.attempts > 5;
   const coordinated = input.coordinatedAccounts >= 3;

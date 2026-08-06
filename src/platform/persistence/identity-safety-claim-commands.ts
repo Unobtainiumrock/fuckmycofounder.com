@@ -40,13 +40,9 @@ export async function persistProfileClaim(input: {
   });
   if (!validClaimCommandInput(input, isSubmission)) return "ineligible";
   return input.runner.run(input.audit.id, async (tx) => {
-    const account = await tx.query<Record<string, unknown>>(
-      "select state,verified_contact from accounts where id=$1 for update",
-      [input.claim.accountId],
-    );
     if (
-      account.rows[0]?.state !== "active" ||
-      account.rows[0]?.verified_contact !== true
+      (isSubmission || input.claim.state === "verified") &&
+      !(await claimantEligible(tx, input.claim.accountId))
     )
       return "ineligible" as const;
     const existing = await tx.query<Record<string, unknown>>(
@@ -65,9 +61,31 @@ export async function persistProfileClaim(input: {
       message: `Profile Claim ${input.claim.state}.`,
       now: input.audit.occurredAt,
     });
-    await writeAudit(tx, input.audit);
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: isSubmission ? "profile-claim-submit" : "profile-claim-decide",
+      priorState:
+        typeof existing.rows[0]?.state === "string"
+          ? existing.rows[0].state
+          : null,
+      resultingState: input.claim.state,
+    });
     return "committed" as const;
   });
+}
+
+async function claimantEligible(
+  tx: TransactionContext,
+  accountId: string,
+): Promise<boolean> {
+  const account = await tx.query<Record<string, unknown>>(
+    "select state,verified_contact from accounts where id=$1 for update",
+    [accountId],
+  );
+  return (
+    account.rows[0]?.state === "active" &&
+    account.rows[0]?.verified_contact === true
+  );
 }
 
 function validClaimCommandInput(
