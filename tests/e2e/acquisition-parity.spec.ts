@@ -82,9 +82,35 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
         reject(new Error("Downloaded card did not decode."));
       image.src = `data:image/png;base64,${base64}`;
     });
-    return { height: image.naturalHeight, width: image.naturalWidth };
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Downloaded card canvas is unavailable.");
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(916, 184, 200, 200).data;
+    let hasSelectedRed = false;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (
+        pixels[index] > 180 &&
+        pixels[index + 1] < 100 &&
+        pixels[index + 2] < 100
+      ) {
+        hasSelectedRed = true;
+        break;
+      }
+    }
+    return {
+      hasSelectedRed,
+      height: image.naturalHeight,
+      width: image.naturalWidth,
+    };
   }, downloadedCard.toString("base64"));
-  expect(decodedCard).toEqual({ height: 1500, width: 1200 });
+  expect(decodedCard).toEqual({
+    hasSelectedRed: true,
+    height: 1500,
+    width: 1200,
+  });
   await expect(
     page.getByText("Sharing creates a private-ish fragment link."),
   ).toBeVisible();

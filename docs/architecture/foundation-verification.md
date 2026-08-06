@@ -48,24 +48,24 @@ migration was introduced.
 
 ## Acquisition parity reconciliation
 
-The 2026-08-05 static-production reconciliation compared the current static
-`/` build and the production-built Next route at a 1440×900 desktop viewport.
-The current static landing measured 1440×3078 at full page. The final Next
-landing has the same visual structure and self-contained interaction, with a
-1440×3057 body-locator baseline. Its 21-pixel shorter final copy is intentional:
-it says sharing is fragment-only and that live Town Board retrieval remains
+The 2026-08-05 static-production reconciliation compared the current static `/`
+build and the production-built Next route at a 1440×900 desktop viewport. The
+current static landing measured 1440×3078 at full page. The final Next landing
+has the same visual structure and self-contained interaction, with a 1440×3057
+body-locator baseline. Its 21-pixel shorter final copy is intentional: it says
+sharing is fragment-only and that live Town Board retrieval remains
 static-production behavior, rather than falsely implying a provider migration.
 The prior macOS Playwright baseline was 1440×2633 while the then-current Next
 result was 1440×2659; it was obsolete rather than a threshold issue. The final
 baseline was regenerated only after the static/Next visual comparison and is
 rechecked by the production-build Playwright journey.
 
-The provider boundary is intentional: the Next route retains the `/board`
-entry and fragment-only local reports, while the static Cloudflare case
-creation, persisted-case loading, publishing, feed, and thread paths remain
-unchanged and outside Order 0. The Next board-key form therefore names that
-retrieval remains on the static production surface rather than attempting a
-partial provider migration.
+The provider boundary is intentional: the Next route retains the `/board` entry
+and fragment-only local reports, while the static Cloudflare case creation,
+persisted-case loading, publishing, feed, and thread paths remain unchanged and
+outside Order 0. The Next board-key form therefore names that retrieval remains
+on the static production surface rather than attempting a partial provider
+migration.
 
 ## Independent final review
 
@@ -104,18 +104,20 @@ Node 24.18.0 container image. It passed formatting, lint, architecture (17
 contracts), unused exports, typecheck, Next build, 22 legacy plus 79 Vitest
 tests, four Postgres tests, both four-assertion production HTTP configurations,
 five Playwright journeys, file-size policy, strict OpenSpec (11/0), container
-smoke, and legacy `build`/`test`. A fresh final standards/spec review of
-`bb04411..955b479` remains required before publication; no provider, deployment,
-secret, DNS, or live data mutation occurred during this corrective pass.
+smoke, and legacy `build`/`test`. A fresh standards review then found that the
+download assertion proved only PNG dimensions, not the selected mugshot pixels;
+the final task evidence was reopened for that correction and a review of the
+resulting head. No provider, deployment, secret, DNS, or live data mutation
+occurred during this corrective pass.
 
 ## Explicitly deferred evidence
 
 The foundation work selected or mutated no production database, authentication,
 email, object storage, scanning, CDN, hosting, queue, analytics, DNS, or secret
 provider. Current `main` independently contains a Cloudflare static deployment
-with Pages Functions, KV, R2, and D1; this record supplies no provider read-back,
-preview, live migration, crawler-unfurl, or acceptance evidence for that system.
-Those external checks require separate authority.
+with Pages Functions, KV, R2, and D1; this record supplies no provider
+read-back, preview, live migration, crawler-unfurl, or acceptance evidence for
+that system. Those external checks require separate authority.
 
 ## Clean-checkout gate record
 
@@ -123,22 +125,22 @@ The final clean checkout uses the downloaded pinned Node.js 24.18.0 runtime,
 Corepack pnpm 9.15.4, PostgreSQL 17.10-alpine, and the exact `fmcf_test`
 database/user identity on local port 54329. The default 5432 host port belonged
 to an unrelated local service, so the disposable container was recreated on
-54329 before connecting; the guard accepted the URL and no non-test identity
-was contacted.
+54329 before connecting; the guard accepted the URL and no non-test identity was
+contacted.
 
-| Command | Result |
-| --- | --- |
-| `pnpm format:check` | pass |
-| `pnpm lint` | pass |
-| `pnpm check:architecture` | pass (17 contracts) |
-| `pnpm check:unused` | pass |
-| `pnpm typecheck` | pass |
-| `pnpm build:app` | pass |
-| `pnpm test:all` | pass (22 legacy + 80 Vitest assertions) |
-| `pnpm test:integration` | pass (4 Postgres + 4 production HTTP assertions) |
-| `pnpm test:e2e` | pass (3 production-built browser journeys) |
-| `pnpm check:file-sizes` | pass |
-| `pnpm openspec:validate` | pass |
-| `pnpm test:container` | pass |
-| `pnpm build` | pass (legacy static fingerprint build) |
-| `pnpm test` | pass (22 legacy assertions) |
+| Command                   | Result                                           |
+| ------------------------- | ------------------------------------------------ |
+| `pnpm format:check`       | pass                                             |
+| `pnpm lint`               | pass                                             |
+| `pnpm check:architecture` | pass (17 contracts)                              |
+| `pnpm check:unused`       | pass                                             |
+| `pnpm typecheck`          | pass                                             |
+| `pnpm build:app`          | pass                                             |
+| `pnpm test:all`           | pass (22 legacy + 80 Vitest assertions)          |
+| `pnpm test:integration`   | pass (4 Postgres + 4 production HTTP assertions) |
+| `pnpm test:e2e`           | pass (3 production-built browser journeys)       |
+| `pnpm check:file-sizes`   | pass                                             |
+| `pnpm openspec:validate`  | pass                                             |
+| `pnpm test:container`     | pass                                             |
+| `pnpm build`              | pass (legacy static fingerprint build)           |
+| `pnpm test`               | pass (22 legacy assertions)                      |
