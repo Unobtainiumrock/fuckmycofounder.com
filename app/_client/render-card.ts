@@ -9,21 +9,36 @@ const colors = {
   acid: "#d8ff3e",
 };
 
-export async function renderCardBlob(report: CookedQuizReport): Promise<Blob> {
+export async function renderCardBlob(
+  report: CookedQuizReport,
+  avatarUrl?: string,
+): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Card rendering is unavailable.");
 
+  const avatar = avatarUrl
+    ? await loadImage(avatarUrl).catch(() => undefined)
+    : undefined;
   drawFrame(context, report);
-  drawSections(context, report);
+  drawSections(context, report, avatar);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
       else reject(new Error("Card rendering failed."));
     }, "image/png");
+  });
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Mugshot load failed."));
+    image.src = url;
   });
 }
 
@@ -61,9 +76,10 @@ function drawFrame(
 function drawSections(
   context: CanvasRenderingContext2D,
   report: CookedQuizReport,
+  avatar?: HTMLImageElement,
 ): void {
   const left = 72;
-  const maximumWidth = width - 144;
+  const maximumWidth = width - 144 - (avatar ? 248 : 0);
   const sections: ReadonlyArray<
     readonly [string, string, number, number, number]
   > = [
@@ -72,6 +88,7 @@ function drawSections(
     ["THEIR DEFENSE", `“${report.quote}”`, 37, 48, 3],
     ["ADULT TRANSLATION", report.translation, 37, 48, 3],
   ];
+  if (avatar) drawAvatar(context, avatar);
   let y = 305;
   for (const [heading, text, size, lineHeight, maximumLines] of sections) {
     drawLabel(context, heading, left, y);
@@ -108,6 +125,23 @@ function drawSections(
   context.fillStyle = "rgba(244,237,223,.62)";
   context.font = "700 24px monospace";
   context.fillText("FUCKMYCOFOUNDER.COM", left, height - 67);
+}
+
+function drawAvatar(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+): void {
+  const size = 200;
+  const x = width - 72 - size - 24;
+  const y = 172;
+  context.fillStyle = colors.paper;
+  context.fillRect(x, y, size + 24, size + 62);
+  context.drawImage(image, x + 12, y + 12, size, size);
+  context.fillStyle = colors.ink;
+  context.font = "900 22px monospace";
+  context.textAlign = "center";
+  context.fillText("SUBJECT", x + (size + 24) / 2, y + size + 45);
+  context.textAlign = "left";
 }
 
 function drawWrapped(

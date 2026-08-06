@@ -17,8 +17,9 @@ export async function copyReportLink(
 
 export async function downloadReportCard(
   report: CookedQuizReport,
+  avatarUrl?: string,
 ): Promise<void> {
-  const blob = await renderCardBlob(report);
+  const blob = await renderCardBlob(report, avatarUrl);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -30,9 +31,10 @@ export async function downloadReportCard(
 export async function shareReport(
   report: CookedQuizReport,
   quiz: CookedQuiz,
+  avatarUrl?: string,
 ): Promise<string> {
   const url = buildShareUrl(report, quiz);
-  const blob = await renderCardBlob(report);
+  const blob = await renderCardBlob(report, avatarUrl);
   const file = new File(
     [blob],
     `${report.id.toLowerCase()}-incident-report.png`,

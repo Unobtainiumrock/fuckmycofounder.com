@@ -6,6 +6,8 @@ const contactRules = [
     pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu,
     label: "email address",
   },
+  { pattern: /\b(?:https?:\/\/|www\.)\S+/iu, label: "link" },
+  { pattern: /(^|\s)@[a-z0-9_]{2,}/iu, label: "@handle" },
   { pattern: /\+?\d[\d\s().-]{7,}\d/u, label: "phone number" },
 ] as const;
 const maximumLengths: Record<StatementField, number> = {

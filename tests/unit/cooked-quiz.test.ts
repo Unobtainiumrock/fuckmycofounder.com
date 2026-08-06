@@ -58,7 +58,7 @@ describe("Cooked Quiz module", () => {
     expect(quiz.restore(fragment)).toEqual(submitted);
   });
 
-  it("rejects contact details and malformed fragments without partial output", () => {
+  it("rejects identifiers and malformed fragments without partial output", () => {
     const quiz = createCookedQuiz({ clock: fixedClock });
 
     expect(
@@ -73,6 +73,18 @@ describe("Cooked Quiz module", () => {
           "Leave out the email address — no contact info in case files.",
       },
     });
+    const identifiers: ReadonlyArray<readonly [string, string]> = [
+      ["posted it at https://example.com", "link"],
+      ["slacked @definitely_a_person yesterday", "@handle"],
+    ];
+    for (const [value, label] of identifiers) {
+      expect(quiz.submit({ ...payload, incident: value })).toEqual({
+        status: "rejected",
+        errors: {
+          incident: `Leave out the ${label} — no contact info in case files.`,
+        },
+      });
+    }
     expect(quiz.restore("#r=this-is-not-json")).toEqual({ status: "ignored" });
     expect(quiz.restore(`#r=${"a".repeat(1801)}`)).toEqual({
       status: "ignored",

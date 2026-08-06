@@ -27,6 +27,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   await page
     .locator("[data-avatar-input]")
     .setInputFiles("public/assets/images/share-card.png");
+  await expect(
+    page.getByRole("article", { name: "Live case file preview" }),
+  ).toBeHidden();
   await page.getByLabel("My cofounder…").fill("called a six a.m. meeting");
   await expect(
     page.getByRole("article", { name: "Live case file preview" }),

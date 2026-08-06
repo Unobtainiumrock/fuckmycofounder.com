@@ -107,7 +107,13 @@ export function initializeCookedQuiz(): () => void {
   };
 
   const updateLivePreview = (): void => {
-    const report = quiz.preview(collectSubmission(form));
+    const submission = collectSubmission(form);
+    const hasDraft = [
+      submission.incident,
+      submission.quote,
+      submission.translation,
+    ].some((value) => value.trim());
+    const report = hasDraft ? quiz.preview(submission) : undefined;
     previewWrap.hidden = !report;
     if (report) renderReport(report, preview, avatarUrl);
   };
@@ -270,7 +276,9 @@ export function initializeCookedQuiz(): () => void {
     "[data-share-report]",
     toast,
     () =>
-      currentReport ? shareReport(currentReport, quiz) : Promise.resolve(""),
+      currentReport
+        ? shareReport(currentReport, quiz, avatarUrl)
+        : Promise.resolve(""),
     signal,
   );
   bindAsyncAction(
@@ -279,7 +287,7 @@ export function initializeCookedQuiz(): () => void {
     toast,
     async () => {
       if (!currentReport) return "";
-      await downloadReportCard(currentReport);
+      await downloadReportCard(currentReport, avatarUrl);
       return "Downloaded. Store beside the unsigned SAFE note.";
     },
     signal,
