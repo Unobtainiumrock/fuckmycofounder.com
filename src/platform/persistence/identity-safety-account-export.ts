@@ -21,6 +21,7 @@ export async function loadAuthorizedAccountData(input: {
   readonly accountId: string;
   readonly requesterAccountId: string;
   readonly sessionId: string;
+  readonly now: Date;
   readonly audit: AuditEvent;
 }): Promise<
   | { readonly kind: "not-authorized" }
@@ -58,7 +59,7 @@ export async function loadAuthorizedAccountData(input: {
       !(await hasRecentReauthentication(tx, {
         accountId: input.accountId,
         sessionId: input.sessionId,
-        now: input.audit.occurredAt,
+        now: input.now,
       }))
     )
       return { kind: "not-authorized" as const };
@@ -91,6 +92,7 @@ export async function loadAuthorizedAccountData(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "account-export",
+      occurredAt: input.now,
       priorState: state,
       resultingState: state,
     });

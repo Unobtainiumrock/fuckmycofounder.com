@@ -282,6 +282,7 @@ function staffCommandAllowed(
       "moderation-enforce:trust-safety.enforce",
       "moderation-appeal-decision:trust-safety.appeal-decide",
       "restricted-reveal:restricted.anonymous-author-linkage",
+      "restricted-reveal-approve:restricted.anonymous-author-linkage",
       "restricted-reveal-project:restricted.anonymous-author-linkage",
       "audit-mutation-attempt:audit.append-only",
     ]),
@@ -293,6 +294,7 @@ function staffCommandAllowed(
       "legal-hold-apply:retention.legal-hold",
       "legal-hold-release:retention.legal-hold",
       "restricted-reveal:restricted.anonymous-author-linkage",
+      "restricted-reveal-approve:restricted.anonymous-author-linkage",
       "restricted-reveal-project:restricted.anonymous-author-linkage",
     ]),
     "recovery-reviewer": new Set([

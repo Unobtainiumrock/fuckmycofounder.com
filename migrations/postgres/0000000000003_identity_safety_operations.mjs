@@ -112,6 +112,19 @@ export const up = (pgm) => {
       legal_hold boolean not null default false,
       appeal_active boolean not null default false
     );
+    create table restricted_reveal_approvals (
+      id text primary key,
+      case_id text not null references moderation_cases(id),
+      linkage_id text not null references anonymous_linkages(id),
+      request_actor_id text not null,
+      approver_id text not null,
+      case_reason text not null,
+      approved_at timestamptz not null,
+      used_at timestamptz,
+      check (request_actor_id <> approver_id)
+    );
+    alter table restricted_reveals add column approval_id text not null
+      references restricted_reveal_approvals(id);
     alter table restricted_reveals add constraint restricted_reveal_linkage
       foreign key (linkage_id) references anonymous_linkages(id);
     create table abuse_reviews (
@@ -167,6 +180,7 @@ export const down = (pgm) => {
         or exists (select 1 from appeal_decisions)
         or exists (select 1 from claim_appeal_decisions)
         or exists (select 1 from restricted_reveals)
+        or exists (select 1 from restricted_reveal_approvals)
         or exists (select 1 from anonymous_linkages)
         or exists (select 1 from security_logs)
         or exists (select 1 from byline_edits)
@@ -188,6 +202,7 @@ export const down = (pgm) => {
     drop table audit_evidence_payloads;
     drop table security_logs;
     drop table restricted_reveals;
+    drop table restricted_reveal_approvals;
     drop table anonymous_linkages;
     drop table claim_appeal_decisions;
     drop table claim_appeals;

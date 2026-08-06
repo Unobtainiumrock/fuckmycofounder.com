@@ -24,6 +24,7 @@ export async function persistProfileClaim(input: {
   readonly claim: ProfileClaim;
   readonly reviewerId: string | null;
   readonly encryptedEvidence: Uint8Array | null;
+  readonly now: Date;
   readonly challenge?: {
     readonly id: string;
     readonly challengerAccountId: string;
@@ -59,11 +60,12 @@ export async function persistProfileClaim(input: {
       accountId: input.claim.accountId,
       kind: `claim-${input.claim.state}`,
       message: `Profile Claim ${input.claim.state}.`,
-      now: input.audit.occurredAt,
+      now: input.now,
     });
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: isSubmission ? "profile-claim-submit" : "profile-claim-decide",
+      occurredAt: input.now,
       priorState:
         typeof existing.rows[0]?.state === "string"
           ? existing.rows[0].state
@@ -113,7 +115,7 @@ async function persistClaimSubmission(
     !(await hasRecentReauthentication(tx, {
       accountId: input.claim.accountId,
       sessionId: input.sessionId,
-      now: input.audit.occurredAt,
+      now: input.now,
     }))
   )
     return false;
@@ -127,7 +129,7 @@ async function persistClaimSubmission(
       input.claim.profileId,
       input.claim.evidenceKind,
       input.encryptedEvidence,
-      input.audit.occurredAt,
+      input.now,
     ],
   );
   return true;
@@ -175,7 +177,7 @@ async function persistClaimSideEffects(
         input.challenge.id,
         input.claim.id,
         input.challenge.challengerAccountId,
-        input.audit.occurredAt,
+        input.now,
       ],
     );
   }
@@ -186,7 +188,7 @@ async function persistClaimSideEffects(
   );
   await tx.query(
     "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
-    [input.claim.accountId, input.audit.occurredAt],
+    [input.claim.accountId, input.now],
   );
 }
 

@@ -68,6 +68,7 @@ export async function runDurableRetention(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "retention-run",
+      occurredAt: input.now,
       priorState: null,
       resultingState:
         completed.length === 0 ? "no-expired-data" : "expired-data-minimized",
@@ -141,6 +142,7 @@ export async function persistLegalHold(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: `legal-hold-${input.operation}`,
+      occurredAt: input.now,
       reasonCode: input.reason,
       priorState: input.operation === "apply" ? "unheld" : "held",
       resultingState: input.operation === "apply" ? "held" : "released",

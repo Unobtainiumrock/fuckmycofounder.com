@@ -36,6 +36,7 @@ import {
   persistRecoveryReverification,
   persistReportAndCase,
   recordAuditMutationAttempt,
+  recordRestrictedRevealApproval,
   recordRestrictedReveal,
 } from "@/src/platform/persistence/identity-safety-commands";
 import {
@@ -134,6 +135,7 @@ const privilegedActions: Readonly<
   "moderation-enforce": "moderator",
   "moderation-appeal-decision": "moderator",
   "restricted-reveal": "moderator",
+  "restricted-reveal-approve": "moderator",
   "restricted-reveal-project": "moderator",
   "audit-mutation-attempt": "moderator",
   "profile-claim-decide": "identity-reviewer",
@@ -419,6 +421,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistProfileClaim({
         runner,
+        now,
         authorization: authorize({
           action: "profile-claim-decide",
           capability: "profile-claim.decide",
@@ -445,6 +448,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistProfileClaim({
         runner,
+        now,
         authorization: authorize({
           action: "profile-claim-decide",
           capability: "profile-claim.decide",
@@ -566,6 +570,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistAuthenticationMethodChange({
         runner,
+        now,
         authorization: authorize({
           action: "add-authentication-method",
           capability: "account.authentication-method",
@@ -616,6 +621,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         accountId: "sensitive-owner",
         requesterAccountId: "sensitive-owner",
         sessionId: "other-session",
+        now,
         audit: audit("cross-session-export", "identity"),
       }),
     ).resolves.toEqual({ kind: "not-authorized" });
@@ -642,6 +648,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistAuthenticationMethodChange({
         runner,
+        now,
         authorization: staleMethodAuthorization,
         accountId: "sensitive-owner",
         sessionId: "owner-session",
@@ -669,6 +676,26 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await pool.query(
       "update accounts set state='active' where id='sensitive-owner'",
     );
+    await pool.query(
+      "update accounts set state='suspended' where id='sensitive-other'",
+    );
+    await expect(
+      persistAccountBlock({
+        runner,
+        authorization: authorize({
+          action: "account-block",
+          capability: "trust-safety.block",
+          targetKind: "account",
+          targetId: "sensitive-other",
+          actorId: "sensitive-owner",
+          decisionId: "block-suspended-target",
+        }),
+        blockerId: "sensitive-owner",
+        blockedId: "sensitive-other",
+        now,
+        audit: audit("block-suspended-target-audit", "moderation"),
+      }),
+    ).resolves.toBe("committed");
     await expect(
       loadAuthorizedAccountData({
         runner,
@@ -683,21 +710,61 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         accountId: "sensitive-owner",
         requesterAccountId: "sensitive-owner",
         sessionId: "owner-session",
-        audit: audit("canonical-export-audit", "identity"),
+        now,
+        audit: {
+          ...audit("canonical-export-audit", "retention"),
+          occurredAt: new Date(now.getTime() + 86_400_000),
+          restrictedEvidenceReferences: ["caller-secret"],
+        },
       }),
     ).resolves.toMatchObject({ kind: "account-self-restricted" });
     expect(
       (
         await pool.query(
-          "select actor_role,reason_code,prior_state,resulting_state from identity_safety_audit where id='canonical-export-audit'",
+          "select category,actor_role,occurred_at,reason_code,prior_state,resulting_state,restricted_evidence_references from identity_safety_audit where id='canonical-export-audit'",
         )
       ).rows[0],
     ).toEqual({
+      category: "identity",
       actor_role: "account",
+      occurred_at: now,
       reason_code: "account-export",
       prior_state: "active",
       resulting_state: "active",
+      restricted_evidence_references: [],
     });
+
+    await expect(
+      persistAuthenticationMethodChange({
+        runner,
+        now,
+        authorization: authorize({
+          action: "add-authentication-method",
+          capability: "account.authentication-method",
+          targetKind: "account",
+          targetId: "sensitive-owner",
+          actorId: "sensitive-owner",
+          decisionId: "canonical-method-add",
+        }),
+        accountId: "sensitive-owner",
+        sessionId: "owner-session",
+        operation: "add",
+        method: {
+          id: "canonical-method",
+          provider: "apple",
+          subject: "canonical-subject",
+          verifiedAt: now,
+        },
+        audit: audit("canonical-method-audit", "identity"),
+      }),
+    ).resolves.toBe("committed");
+    expect(
+      (
+        await pool.query(
+          "select prior_state,resulting_state from identity_safety_audit where id='canonical-method-audit'",
+        )
+      ).rows[0],
+    ).toEqual({ prior_state: "unlinked", resulting_state: "linked" });
   });
 
   it("atomically raises an existing moderation case to urgent for a threat report", async () => {
@@ -707,7 +774,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       directory: migrations,
     });
     await pool.query(
-      "insert into accounts (id,state,verified_contact) values ('reporter-a','active',true),('reporter-b','active',true),('report-target','active',true)",
+      "insert into accounts (id,state,verified_contact) values ('reporter-a','active',true),('reporter-b','active',true),('reporter-c','active',true),('report-target','active',true)",
     );
     const persist = (
       reporterAccountId: string,
@@ -737,7 +804,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         moderationCase: {
           id: "shared-case",
           targetId: "shared-target",
-          state: "received",
+          state: "investigating",
           queue,
           reportIds: [reportId],
         },
@@ -753,6 +820,16 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persist("reporter-a", "ordinary-report", "harassment", "ordinary"),
     ).resolves.toBe("committed");
+    expect(
+      (
+        await pool.query(
+          "select state,queue from moderation_cases where id='shared-case'",
+        )
+      ).rows[0],
+    ).toEqual({ state: "received", queue: "ordinary" });
+    await pool.query(
+      "update moderation_cases set state='triaged' where id='shared-case'",
+    );
     await expect(
       persist(
         "reporter-b",
@@ -764,10 +841,16 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     expect(
       (
         await pool.query(
-          "select queue from moderation_cases where id='shared-case'",
+          "select state,queue from moderation_cases where id='shared-case'",
         )
       ).rows[0],
-    ).toEqual({ queue: "urgent" });
+    ).toEqual({ state: "triaged", queue: "urgent" });
+    await pool.query(
+      "update moderation_cases set state='resolved' where id='shared-case'",
+    );
+    await expect(
+      persist("reporter-c", "late-report", "harassment", "ordinary"),
+    ).resolves.toBe("ineligible");
   });
 
   it("durably coordinates bound identity, moderation, appeal, reveal, and retention commands", async () => {
@@ -833,6 +916,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistAuthenticationMethodChange({
         runner,
+        now,
         authorization: authorize({
           action: "add-authentication-method",
           capability: "account.authentication-method",
@@ -854,6 +938,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     const removals = await Promise.all([
       persistAuthenticationMethodChange({
         runner,
+        now,
         authorization: authorize({
           action: "remove-authentication-method",
           capability: "account.authentication-method",
@@ -874,6 +959,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       }),
       persistAuthenticationMethodChange({
         runner,
+        now,
         authorization: authorize({
           action: "remove-authentication-method",
           capability: "account.authentication-method",
@@ -906,6 +992,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         accountId: account.id,
         requesterAccountId: account.id,
         sessionId: "session-a",
+        now,
         audit: audit("account-exported", "identity"),
       }),
     ).resolves.toMatchObject({ kind: "account-self-restricted" });
@@ -969,6 +1056,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistProfileClaim({
         runner,
+        now,
         authorization: authorize({
           action: "profile-claim-submit",
           capability: "profile-claim.submit",
@@ -992,6 +1080,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistProfileClaim({
         runner,
+        now,
         authorization: authorize({
           action: "profile-claim-submit",
           capability: "profile-claim.submit",
@@ -1015,6 +1104,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistProfileClaim({
         runner,
+        now,
         authorization: authorize({
           action: "profile-claim-decide",
           capability: "profile-claim.decide",
@@ -1030,9 +1120,33 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         audit: audit("claim-verified", "claim"),
       }),
     ).resolves.toBe("committed");
+    await pool.query("update accounts set state='suspended' where id=$1", [
+      account.id,
+    ]);
     await expect(
       persistBylineClaimLink({
         runner,
+        now,
+        authorization: authorize({
+          action: "byline-claim-link",
+          capability: "public-byline.claim",
+          targetKind: "claim",
+          targetId: claim.id,
+          decisionId: "stale-byline-claim-link",
+        }),
+        accountId: account.id,
+        claimId: claim.id,
+        enabled: true,
+        audit: audit("stale-byline-claim-link-audit", "claim"),
+      }),
+    ).resolves.toBe("ineligible");
+    await pool.query("update accounts set state='active' where id=$1", [
+      account.id,
+    ]);
+    await expect(
+      persistBylineClaimLink({
+        runner,
+        now,
         authorization: authorize({
           action: "byline-claim-link",
           capability: "public-byline.claim",
@@ -1103,6 +1217,33 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         )
       ).rows[0]?.encrypted_evidence,
     ).not.toBeNull();
+    await pool.query("update accounts set state='suspended' where id=$1", [
+      account.id,
+    ]);
+    await expect(
+      persistClaimAppealDecision({
+        runner,
+        authorization: authorize({
+          action: "profile-claim-appeal-decision",
+          capability: "profile-claim.appeal-decide",
+          targetKind: "claim-appeal",
+          targetId: "claim-appeal-a",
+          actorId: "identity-reviewer-b",
+          decisionId: "claim-appeal-ineligible-account",
+        }),
+        actorId: "identity-reviewer-b",
+        id: "claim-appeal-ineligible-account-decision",
+        appealId: "claim-appeal-a",
+        resultingState: "verified",
+        reasonCode: "restore-denied",
+        now,
+        audit: audit("claim-appeal-ineligible-account-audit", "appeal"),
+      }),
+    ).resolves.toBe("ineligible");
+    await pool.query(
+      "update accounts set state='active',verified_contact=true where id=$1",
+      [account.id],
+    );
     await expect(
       persistClaimAppealDecision({
         runner,
@@ -1464,23 +1605,84 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       "insert into anonymous_linkages (id,account_id,encrypted_payload,expires_at) values ('linkage-a',$1,$2,$3),('linkage-b','account-b',$2,$3)",
       [account.id, new Uint8Array([4]), new Date(now.getTime() + 86_400_000)],
     );
-    await recordRestrictedReveal({
-      runner,
-      authorization: authorize({
-        action: "restricted-reveal",
-        capability: "restricted.anonymous-author-linkage",
-        targetKind: "anonymous-linkage",
-        targetId: "linkage-a",
-        actorId: "moderator-b",
-        purpose: moderationCase.id,
+    const revealCaseId = "reveal-case-a";
+    await pool.query(
+      `insert into moderation_cases
+       (id,target_id,state,queue,target_snapshot,affected_account_id,created_at)
+       values ($1,'anonymous-linkage-review','received','ordinary','{}'::jsonb,$2,$3)`,
+      [revealCaseId, account.id, now],
+    );
+    await expect(
+      recordRestrictedRevealApproval({
+        runner,
+        authorization: authorize({
+          action: "restricted-reveal-approve",
+          capability: "restricted.anonymous-author-linkage",
+          targetKind: "anonymous-linkage",
+          targetId: "linkage-a",
+          actorId: "lead-a",
+          purpose: revealCaseId,
+        }),
+        id: "reveal-approval-a",
+        requestActorId: "moderator-b",
+        approverId: "lead-a",
+        caseId: revealCaseId,
+        linkageId: "linkage-a",
+        now,
+        audit: audit("reveal-approved", "policy"),
       }),
-      id: "reveal-a",
-      actorId: "moderator-b",
-      approverId: "lead-a",
-      caseReason: moderationCase.id,
-      linkageId: "linkage-a",
-      field: "anonymous-author-linkage",
-      audit: audit("reveal-recorded", "moderation"),
+    ).resolves.toBe("committed");
+    await expect(
+      recordRestrictedReveal({
+        runner,
+        authorization: authorize({
+          action: "restricted-reveal",
+          capability: "restricted.anonymous-author-linkage",
+          targetKind: "anonymous-linkage",
+          targetId: "linkage-a",
+          actorId: "moderator-b",
+          purpose: revealCaseId,
+        }),
+        id: "reveal-a",
+        actorId: "moderator-b",
+        approvalId: "reveal-approval-a",
+        caseReason: revealCaseId,
+        linkageId: "linkage-a",
+        field: "anonymous-author-linkage",
+        now,
+        audit: audit("reveal-recorded", "moderation"),
+      }),
+    ).resolves.toMatchObject({ kind: "revealed" });
+    await expect(
+      recordRestrictedReveal({
+        runner,
+        authorization: authorize({
+          action: "restricted-reveal",
+          capability: "restricted.anonymous-author-linkage",
+          targetKind: "anonymous-linkage",
+          targetId: "linkage-b",
+          actorId: "moderator-b",
+          purpose: revealCaseId,
+        }),
+        id: "reveal-denied",
+        actorId: "moderator-b",
+        approvalId: "reveal-approval-a",
+        caseReason: revealCaseId,
+        linkageId: "linkage-b",
+        field: "anonymous-author-linkage",
+        now,
+        audit: audit("reveal-denied-audit", "moderation"),
+      }),
+    ).resolves.toEqual({ kind: "denied", auditId: "reveal-denied-audit" });
+    expect(
+      (
+        await pool.query(
+          "select resulting_state,restricted_evidence_references from identity_safety_audit where id='reveal-denied-audit'",
+        )
+      ).rows[0],
+    ).toEqual({
+      resulting_state: "denied",
+      restricted_evidence_references: [],
     });
     await expect(
       loadRestrictedAttributionProjection({
@@ -1491,18 +1693,19 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
           targetKind: "anonymous-linkage",
           targetId: "linkage-a",
           actorId: "moderator-b",
-          purpose: moderationCase.id,
+          purpose: revealCaseId,
         }),
         actorId: "moderator-b",
         revealId: "reveal-a",
         linkageId: "linkage-a",
-        caseReason: moderationCase.id,
+        caseReason: revealCaseId,
+        now,
         audit: audit("reveal-projected", "moderation"),
       }),
     ).resolves.toEqual({
       kind: "restricted",
       accountId: account.id,
-      caseReason: moderationCase.id,
+      caseReason: revealCaseId,
     });
     await expect(
       loadRestrictedAttributionProjection({
@@ -1513,12 +1716,13 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
           targetKind: "anonymous-linkage",
           targetId: "linkage-b",
           actorId: "moderator-b",
-          purpose: moderationCase.id,
+          purpose: revealCaseId,
         }),
         actorId: "moderator-b",
         revealId: "reveal-a",
         linkageId: "linkage-b",
-        caseReason: moderationCase.id,
+        caseReason: revealCaseId,
+        now,
         audit: audit("unrelated-reveal-denied", "moderation"),
       }),
     ).resolves.toEqual({ kind: "not-authorized" });
@@ -1534,6 +1738,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       actorId: "moderator-b",
       targetAuditId: "account-created",
       attemptedOperation: "update",
+      now,
       event: {
         ...audit("audit-denial", "moderation"),
         reasonCode: "audit-mutation-denied",
@@ -1706,6 +1911,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         operation: "contact",
         sessionId: "session-fresh",
         freshProofVerified: true,
+        now,
         audit: audit("recovery-contact-reverified", "identity"),
       }),
     ).resolves.toBe("committed");
@@ -1723,6 +1929,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         claimId: claim.id,
         sessionId: "session-fresh",
         freshProofVerified: true,
+        now,
         audit: audit("recovery-claim-reverified", "identity"),
       }),
     ).resolves.toBe("committed");
@@ -1884,6 +2091,7 @@ function audit(
     | "identity"
     | "claim"
     | "moderation"
+    | "policy"
     | "enforcement"
     | "appeal"
     | "retention",

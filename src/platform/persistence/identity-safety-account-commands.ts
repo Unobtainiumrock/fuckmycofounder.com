@@ -87,6 +87,7 @@ export async function persistAuthenticatedAccount(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "account-authenticate",
+      occurredAt: input.method.verifiedAt,
       priorState:
         typeof existingAccount.rows[0]?.state === "string"
           ? existingAccount.rows[0].state
@@ -165,6 +166,7 @@ export async function persistAccountLifecycle(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: input.operation,
+      occurredAt: input.now,
       priorState: state,
       resultingState: accountState(resulting.rows[0]?.state),
     });
@@ -260,6 +262,7 @@ export async function persistRecoveryDecision(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: `recovery-${input.state}`,
+      occurredAt: input.now,
       priorState,
       resultingState: input.state,
     });
@@ -272,6 +275,7 @@ export async function persistAuthenticationMethodChange(input: {
   readonly authorization: AuthorizedDurableCommand;
   readonly accountId: string;
   readonly sessionId: string;
+  readonly now: Date;
   readonly operation: "add" | "remove" | "correct";
   readonly method: {
     readonly id: string;
@@ -312,7 +316,7 @@ export async function persistAuthenticationMethodChange(input: {
       !(await hasRecentReauthentication(tx, {
         accountId: input.accountId,
         sessionId: input.sessionId,
-        now: input.audit.occurredAt,
+        now: input.now,
       }))
     )
       return "reauthentication-required" as const;
@@ -354,16 +358,26 @@ export async function persistAuthenticationMethodChange(input: {
       accountId: input.accountId,
       kind: "authentication-method-changed",
       message: "A sign-in method changed on your Account.",
-      now: input.audit.occurredAt,
+      now: input.now,
     });
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: `${input.operation}-authentication-method`,
-      priorState: "active",
-      resultingState: "active",
+      occurredAt: input.now,
+      ...authenticationMethodAuditTransition(input.operation),
     });
     return "committed" as const;
   });
+}
+
+function authenticationMethodAuditTransition(
+  operation: "add" | "remove" | "correct",
+): { readonly priorState: string; readonly resultingState: string } {
+  if (operation === "add")
+    return { priorState: "unlinked", resultingState: "linked" };
+  if (operation === "remove")
+    return { priorState: "linked", resultingState: "unlinked" };
+  return { priorState: "linked", resultingState: "linked" };
 }
 
 export async function finalizePrivateIdentityErasure(input: {
@@ -415,6 +429,7 @@ export async function finalizePrivateIdentityErasure(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "erase-private-identity",
+      occurredAt: input.now,
       priorState: "deleted",
       resultingState: "private-identity-erased",
     });

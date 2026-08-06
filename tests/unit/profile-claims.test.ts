@@ -93,8 +93,23 @@ describe("Profile Claim foundation", () => {
   it("projects only claimed state and expires raw evidence after 90 days", () => {
     const verified = transitionProfileClaim(pending, "verified", now)!;
     if (verified.state !== "verified") throw new Error("claim not verified");
-    const projection = publicClaimProjection("profile-public", verified);
+    const projection = publicClaimProjection("profile-public", verified, {
+      state: "active",
+      recoveryReverificationRequired: false,
+    });
     expect(projection).toEqual({ profileId: "profile-public", claimed: true });
+    expect(
+      publicClaimProjection("profile-public", verified, {
+        state: "active",
+        recoveryReverificationRequired: true,
+      }),
+    ).toEqual({ profileId: "profile-public", claimed: false });
+    expect(
+      publicClaimProjection("profile-public", verified, {
+        state: "deleted",
+        recoveryReverificationRequired: false,
+      }),
+    ).toEqual({ profileId: "profile-public", claimed: false });
     expect(
       findProjectionLeaks(projection, {
         forbiddenKeys: ["accountId", "evidenceKind", "decidedAt", "reviewerId"],

@@ -16,6 +16,7 @@ import {
   addDays,
   requireAuthorization,
   requiredString,
+  restrictedSnapshot,
   writeAudit,
   writeNotice,
 } from "./identity-safety-persistence-support";
@@ -67,7 +68,7 @@ export async function persistReportAndCase(input: {
       [
         input.moderationCase.id,
         input.moderationCase.targetId,
-        input.moderationCase.state,
+        "received",
         requiredQueue,
         targetSnapshot,
         input.report.createdAt,
@@ -105,7 +106,9 @@ export async function persistReportAndCase(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "report-create",
+      occurredAt: input.report.createdAt,
       reasonCode: `report:${input.report.reason}`,
+      restrictedEvidenceReferences: input.report.evidenceReferences,
       priorState:
         createdCase.rowCount === 1 || typeof caseRow.state !== "string"
           ? null
@@ -126,7 +129,9 @@ function caseAcceptsReport(
       row.target_id === input.report.targetId &&
       row.affected_account_id === input.targetAccountId &&
       (row.affected_claim_id ?? null) === (input.targetClaimId ?? null) &&
-      row.state !== "closed",
+      (row.state === "received" ||
+        row.state === "triaged" ||
+        row.state === "investigating"),
   );
 }
 
@@ -193,7 +198,9 @@ export async function persistEnforcement(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "moderation-enforce",
+      occurredAt: input.action.effectiveAt,
       reasonCode: input.action.policyReason,
+      restrictedEvidenceReferences: [`moderation-case:${input.caseId}`],
       priorState: "investigating",
       resultingState: "resolved",
     });
@@ -301,17 +308,85 @@ async function revokeAccountSessions(
   );
 }
 
+export async function recordRestrictedRevealApproval(input: {
+  readonly runner: TransactionRunner;
+  readonly authorization: AuthorizedDurableCommand;
+  readonly id: string;
+  readonly requestActorId: string;
+  readonly approverId: string;
+  readonly caseId: string;
+  readonly linkageId: string;
+  readonly now: Date;
+  readonly audit: AuditEvent;
+}): Promise<"committed" | "ineligible"> {
+  requireAuthorization(input.authorization, {
+    actorId: input.approverId,
+    action: "restricted-reveal-approve",
+    capability: "restricted.anonymous-author-linkage",
+    targetKind: "anonymous-linkage",
+    targetId: input.linkageId,
+    purpose: input.caseId,
+  });
+  if (input.requestActorId === input.approverId) return "ineligible";
+  return input.runner.run(input.audit.id, async (tx) => {
+    const result = await tx.query<Record<string, unknown>>(
+      `select c.state,l.id linkage_id from moderation_cases c
+       join anonymous_linkages l on l.id=$2
+       where c.id=$1 for update of c,l`,
+      [input.caseId, input.linkageId],
+    );
+    if (
+      !result.rows[0] ||
+      !["received", "triaged", "investigating"].includes(
+        String(result.rows[0].state),
+      )
+    )
+      return "ineligible" as const;
+    await tx.query(
+      `insert into restricted_reveal_approvals
+       (id,case_id,linkage_id,request_actor_id,approver_id,case_reason,approved_at)
+       values ($1,$2,$3,$4,$5,$2,$6)`,
+      [
+        input.id,
+        input.caseId,
+        input.linkageId,
+        input.requestActorId,
+        input.approverId,
+        input.now,
+      ],
+    );
+    await writeAudit(tx, input.audit, {
+      authorization: input.authorization,
+      action: "restricted-reveal-approve",
+      occurredAt: input.now,
+      reasonCode: input.caseId,
+      priorState: "requested",
+      resultingState: "approved",
+      restrictedEvidenceReferences: [`anonymous-linkage:${input.linkageId}`],
+    });
+    return "committed" as const;
+  });
+}
+
 export async function recordRestrictedReveal(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
   readonly id: string;
   readonly actorId: string;
-  readonly approverId: string;
+  readonly approvalId: string;
   readonly caseReason: string;
   readonly linkageId: string;
   readonly field: RestrictedField;
+  readonly now: Date;
   readonly audit: AuditEvent;
-}): Promise<{ readonly revealId: string; readonly auditId: string }> {
+}): Promise<
+  | {
+      readonly kind: "revealed";
+      readonly revealId: string;
+      readonly auditId: string;
+    }
+  | { readonly kind: "denied"; readonly auditId: string }
+> {
   requireAuthorization(input.authorization, {
     actorId: input.actorId,
     action: "restricted-reveal",
@@ -320,37 +395,66 @@ export async function recordRestrictedReveal(input: {
     targetId: input.linkageId,
     purpose: input.caseReason,
   });
-  if (!input.actorId || !input.approverId || !input.caseReason)
-    throw new Error("Restricted reveal requires actor, approver, and reason");
-  await input.runner.run(input.audit.id, async (tx) => {
-    const linkage = await tx.query<Record<string, unknown>>(
-      "select id from anonymous_linkages where id=$1 for update",
-      [input.linkageId],
+  if (!input.actorId || !input.caseReason)
+    throw new Error("Restricted reveal requires actor and reason");
+  const outcome = await input.runner.run(input.audit.id, async (tx) => {
+    const approval = await tx.query<Record<string, unknown>>(
+      `select a.approver_id,c.state from restricted_reveal_approvals a
+       join moderation_cases c on c.id=a.case_id
+       join anonymous_linkages l on l.id=a.linkage_id
+       where a.id=$1 and a.request_actor_id=$2 and a.case_id=$3
+         and a.case_reason=$3 and a.linkage_id=$4 and a.used_at is null
+       for update of a,c,l`,
+      [input.approvalId, input.actorId, input.caseReason, input.linkageId],
     );
-    if (!linkage.rows[0])
-      throw new Error("Restricted reveal linkage is unavailable");
+    const row = approval.rows[0];
+    if (
+      !row ||
+      !["received", "triaged", "investigating"].includes(String(row.state))
+    ) {
+      await writeAudit(tx, input.audit, {
+        authorization: input.authorization,
+        action: "restricted-reveal",
+        occurredAt: input.now,
+        reasonCode: "restricted-reveal-denied",
+        priorState: "requested",
+        resultingState: "denied",
+        restrictedEvidenceReferences: [],
+      });
+      return "denied" as const;
+    }
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "restricted-reveal",
+      occurredAt: input.now,
       reasonCode: input.caseReason,
       priorState: null,
       resultingState: "revealed",
+      restrictedEvidenceReferences: [`anonymous-linkage:${input.linkageId}`],
     });
     await tx.query(
-      "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,linkage_id,allowed,audit_id,created_at) values ($1,$2,$3,$4,$5,$6,true,$7,$8)",
+      "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,linkage_id,allowed,audit_id,created_at,approval_id) values ($1,$2,$3,$4,$5,$6,true,$7,$8,$9)",
       [
         input.id,
         input.actorId,
-        input.approverId,
+        row.approver_id,
         input.caseReason,
         input.field,
         input.linkageId,
         input.audit.id,
-        input.audit.occurredAt,
+        input.now,
+        input.approvalId,
       ],
     );
+    await tx.query(
+      "update restricted_reveal_approvals set used_at=$2 where id=$1",
+      [input.approvalId, input.now],
+    );
+    return "revealed" as const;
   });
-  return { revealId: input.id, auditId: input.audit.id };
+  return outcome === "revealed"
+    ? { kind: "revealed", revealId: input.id, auditId: input.audit.id }
+    : { kind: "denied", auditId: input.audit.id };
 }
 
 export async function recordAuditMutationAttempt(input: {
@@ -359,6 +463,7 @@ export async function recordAuditMutationAttempt(input: {
   readonly actorId: string;
   readonly targetAuditId: string;
   readonly attemptedOperation: "update" | "delete";
+  readonly now: Date;
   readonly event: AuditEvent;
 }): Promise<void> {
   requireAuthorization(input.authorization, {
@@ -390,6 +495,7 @@ export async function recordAuditMutationAttempt(input: {
     await writeAudit(tx, input.event, {
       authorization: input.authorization,
       action: "audit-mutation-attempt",
+      occurredAt: input.now,
       reasonCode: "audit-mutation-denied",
       priorState: "immutable",
       resultingState: "mutation-denied",
@@ -404,6 +510,7 @@ export async function loadRestrictedAttributionProjection(input: {
   readonly revealId: string;
   readonly linkageId: string;
   readonly caseReason: string;
+  readonly now: Date;
   readonly audit: AuditEvent;
 }): Promise<
   | { readonly kind: "not-authorized" }
@@ -447,9 +554,11 @@ export async function loadRestrictedAttributionProjection(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "restricted-reveal-project",
+      occurredAt: input.now,
       reasonCode: input.caseReason,
       priorState: "revealed",
       resultingState: "projected",
+      restrictedEvidenceReferences: [`anonymous-linkage:${input.linkageId}`],
     });
     return { kind: "restricted" as const, ...projection };
   });
@@ -481,37 +590,3 @@ export {
   persistAbuseRiskReview,
   persistModerationCaseTransition,
 } from "./identity-safety-moderation-commands";
-
-function restrictedSnapshot(
-  value: RestrictedTargetSnapshot,
-  expectedTargetId: string,
-): string {
-  if (
-    !["account", "profile", "public-object", "unavailable"].includes(
-      value.kind,
-    ) ||
-    !bounded(value.targetId, 200) ||
-    value.targetId !== expectedTargetId ||
-    !bounded(value.summary, 2_000) ||
-    !(value.capturedAt instanceof Date) ||
-    Number.isNaN(value.capturedAt.getTime()) ||
-    (value.contentReference !== undefined &&
-      !bounded(value.contentReference, 500))
-  )
-    throw new Error("Restricted target snapshot is invalid");
-  return JSON.stringify({
-    kind: value.kind,
-    targetId: value.targetId,
-    summary: value.summary,
-    capturedAt: value.capturedAt.toISOString(),
-    ...(value.contentReference
-      ? { contentReference: value.contentReference }
-      : {}),
-  });
-}
-
-function bounded(value: unknown, maximum: number): value is string {
-  return (
-    typeof value === "string" && value.length > 0 && value.length <= maximum
-  );
-}

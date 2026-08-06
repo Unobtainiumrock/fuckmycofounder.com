@@ -20,6 +20,7 @@ export async function persistRecoveryReverification(input: {
   readonly claimId?: string;
   readonly sessionId: string;
   readonly freshProofVerified: boolean;
+  readonly now: Date;
   readonly audit: AuditEvent;
 }): Promise<"committed" | "ineligible" | "proof-required"> {
   const targetId =
@@ -44,7 +45,7 @@ export async function persistRecoveryReverification(input: {
       !(await hasRecentReauthentication(tx, {
         accountId: input.accountId,
         sessionId: input.sessionId,
-        now: input.audit.occurredAt,
+        now: input.now,
       }))
     )
       return "ineligible" as const;
@@ -85,11 +86,12 @@ export async function persistRecoveryReverification(input: {
         input.operation === "contact"
           ? "Your Account contact was re-verified after recovery."
           : "Your Profile Claim authority was re-verified after recovery.",
-      now: input.audit.occurredAt,
+      now: input.now,
     });
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: `reverify-recovery-${input.operation}`,
+      occurredAt: input.now,
       priorState: "reverification-required",
       resultingState: "verified",
     });

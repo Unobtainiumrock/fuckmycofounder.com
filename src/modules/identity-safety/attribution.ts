@@ -178,6 +178,16 @@ export function linkVerifiedClaim(
 export function publicClaimProjection(
   profileId: string,
   claim: ProfileClaim | null,
+  account: {
+    readonly state: Account["state"];
+    readonly recoveryReverificationRequired: boolean;
+  },
 ): PublicClaimProjection {
-  return { profileId, claimed: claim?.state === "verified" };
+  return {
+    profileId,
+    claimed:
+      claim?.state === "verified" &&
+      account.state === "active" &&
+      !account.recoveryReverificationRequired,
+  };
 }

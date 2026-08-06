@@ -86,6 +86,7 @@ export async function persistClaimAppeal(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "profile-claim-appeal",
+      occurredAt: input.now,
       priorState: requiredString(claim.state, "profile_claims.state"),
       resultingState: "appealed",
     });
@@ -113,16 +114,20 @@ export async function persistClaimAppealDecision(input: {
   });
   return input.runner.run(input.audit.id, async (tx) => {
     const result = await tx.query<Record<string, unknown>>(
-      `select ca.claim_id,ca.appellant_account_id,ca.reviewer_id,ca.state,pc.state claim_state
+      `select ca.claim_id,ca.appellant_account_id,ca.reviewer_id,ca.state,pc.state claim_state,
+              a.state account_state,a.verified_contact
        from claim_appeals ca join profile_claims pc on pc.id=ca.claim_id
-       where ca.id=$1 for update of ca,pc`,
+       join accounts a on a.id=ca.appellant_account_id
+       where ca.id=$1 for update of ca,pc,a`,
       [input.appealId],
     );
     const appeal = result.rows[0];
     if (
       !appeal ||
       appeal.state !== "pending" ||
-      appeal.reviewer_id !== input.actorId
+      appeal.reviewer_id !== input.actorId ||
+      (input.resultingState === "verified" &&
+        (appeal.account_state !== "active" || appeal.verified_contact !== true))
     )
       return "ineligible" as const;
     const claimId = requiredString(appeal.claim_id, "claim_appeals.claim_id");
@@ -174,6 +179,7 @@ export async function persistClaimAppealDecision(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "profile-claim-appeal-decision",
+      occurredAt: input.now,
       reasonCode: input.reasonCode,
       priorState: requiredString(appeal.claim_state, "profile_claims.state"),
       resultingState: input.resultingState,
@@ -248,6 +254,7 @@ export async function persistAppeal(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "moderation-appeal",
+      occurredAt: input.now,
       priorState: "resolved",
       resultingState: "appealed",
     });
@@ -328,6 +335,7 @@ export async function persistAppealDecision(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "moderation-appeal-decision",
+      occurredAt: input.action.effectiveAt,
       reasonCode: input.action.policyReason,
       priorState: "appealed",
       resultingState: "resolved",

@@ -67,8 +67,10 @@ export async function persistModerationCaseTransition(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: `moderation-${input.operation}`,
+      occurredAt: input.now,
       priorState: typeof state === "string" ? state : null,
       resultingState: next,
+      restrictedEvidenceReferences: [`moderation-case:${input.caseId}`],
     });
     return "committed" as const;
   });
@@ -150,6 +152,7 @@ export async function persistAbuseRiskReview(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "abuse-risk-review",
+      occurredAt: input.now,
       reasonCode: decision.reasonCode,
       priorState: null,
       resultingState: decision.allowed ? "allowed" : "review-required",

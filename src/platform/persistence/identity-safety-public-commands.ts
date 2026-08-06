@@ -87,6 +87,7 @@ export async function persistPublicByline(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "byline-write",
+      occurredAt: input.now,
       priorState: prior.rows[0] ? "present" : null,
       resultingState: "present",
     });
@@ -100,6 +101,7 @@ export async function persistBylineClaimLink(input: {
   readonly accountId: string;
   readonly claimId: string;
   readonly enabled: boolean;
+  readonly now: Date;
   readonly audit: AuditEvent;
 }): Promise<"committed" | "ineligible"> {
   requireAuthorization(input.authorization, {
@@ -110,6 +112,16 @@ export async function persistBylineClaimLink(input: {
     targetId: input.claimId,
   });
   return input.runner.run(input.audit.id, async (tx) => {
+    const account = await tx.query<Record<string, unknown>>(
+      "select state,verified_contact,recovery_reverification_required from accounts where id=$1 for update",
+      [input.accountId],
+    );
+    if (
+      account.rows[0]?.state !== "active" ||
+      account.rows[0]?.verified_contact !== true ||
+      account.rows[0]?.recovery_reverification_required !== false
+    )
+      return "ineligible" as const;
     const claim = await tx.query<Record<string, unknown>>(
       "select account_id,profile_id,state,reverify_required from profile_claims where id=$1 for update",
       [input.claimId],
@@ -135,6 +147,7 @@ export async function persistBylineClaimLink(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "byline-claim-link",
+      occurredAt: input.now,
       priorState: "verified",
       resultingState: input.enabled ? "linked" : "unlinked",
     });
@@ -162,10 +175,9 @@ export async function persistAccountBlock(input: {
       "select id,state from accounts where id=any($1::text[]) order by id for update",
       [[input.blockerId, input.blockedId]],
     );
-    if (
-      accounts.rows.length !== 2 ||
-      accounts.rows.some((row) => row.state !== "active")
-    )
+    const blocker = accounts.rows.find((row) => row.id === input.blockerId);
+    const blocked = accounts.rows.find((row) => row.id === input.blockedId);
+    if (blocker?.state !== "active" || !blocked || blocked.state === "deleted")
       return "ineligible" as const;
     const existing = await tx.query(
       "select 1 from account_blocks where blocker_id=$1 and blocked_id=$2",
@@ -178,6 +190,7 @@ export async function persistAccountBlock(input: {
     await writeAudit(tx, input.audit, {
       authorization: input.authorization,
       action: "account-block",
+      occurredAt: input.now,
       priorState: existing.rowCount === 1 ? "blocked" : "unblocked",
       resultingState: "blocked",
     });

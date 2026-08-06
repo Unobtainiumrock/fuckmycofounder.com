@@ -5,6 +5,7 @@ import {
   matchesAuthorizedDurableCommand,
   type AuditEvent,
   type AuthorizedDurableCommand,
+  type RestrictedTargetSnapshot,
 } from "../../modules/identity-safety/server";
 import type { TransactionContext } from "./transaction-runner";
 
@@ -44,13 +45,15 @@ export async function writeNotice(
 
 export async function writeAudit(
   tx: TransactionContext,
-  event: AuditEvent,
+  event: Pick<AuditEvent, "id">,
   input: {
     readonly authorization: AuthorizedDurableCommand;
     readonly action: string;
+    readonly occurredAt: Date;
     readonly reasonCode?: string;
     readonly priorState: string | null;
     readonly resultingState: string;
+    readonly restrictedEvidenceReferences?: readonly string[];
   },
 ): Promise<void> {
   const identity = durableCommandAuditIdentity(input.authorization);
@@ -61,25 +64,71 @@ export async function writeAudit(
      values ($1,$2,$3,$4,$5,$6,$7,$8,'[]'::jsonb)`,
     [
       event.id,
-      event.category,
+      auditCategory(identity.action),
       identity.actorRole,
-      event.occurredAt,
+      input.occurredAt,
       input.reasonCode ?? identity.action,
       identity.policyVersion,
       input.priorState,
       input.resultingState,
     ],
   );
-  if (event.restrictedEvidenceReferences.length > 0) {
+  const restrictedReferences = input.restrictedEvidenceReferences ?? [];
+  if (restrictedReferences.length > 0) {
     await tx.query(
       "insert into audit_evidence_payloads (audit_id,restricted_references,expires_at) values ($1,$2::jsonb,$3)",
       [
         event.id,
-        JSON.stringify(event.restrictedEvidenceReferences),
-        addMonths(event.occurredAt, 24),
+        JSON.stringify(restrictedReferences),
+        addMonths(input.occurredAt, 24),
       ],
     );
   }
+}
+
+const exactAuditCategories = new Map<string, AuditEvent["category"]>([
+  ["byline-claim-link", "claim"],
+  ["profile-claim-appeal", "appeal"],
+  ["profile-claim-appeal-decision", "appeal"],
+  ["moderation-enforce", "enforcement"],
+  ["report-create", "moderation"],
+  ["account-block", "moderation"],
+  ["abuse-risk-review", "moderation"],
+  ["restricted-reveal", "policy"],
+  ["restricted-reveal-approve", "policy"],
+  ["restricted-reveal-project", "policy"],
+  ["audit-mutation-attempt", "policy"],
+  ["account-authenticate", "identity"],
+  ["account-export", "identity"],
+  ["byline-write", "identity"],
+  ["request-deletion", "identity"],
+  ["cancel-deletion", "identity"],
+  ["finalize-deletion", "identity"],
+  ["erase-private-identity", "identity"],
+  ["activate", "identity"],
+  ["limit", "identity"],
+  ["suspend", "identity"],
+]);
+
+const prefixAuditCategories = [
+  ["profile-claim-", "claim"],
+  ["moderation-appeal", "appeal"],
+  ["retention-", "retention"],
+  ["legal-hold-", "retention"],
+  ["moderation-", "moderation"],
+  ["recovery-", "identity"],
+  ["reverify-recovery-", "identity"],
+] as const;
+
+function auditCategory(action: string): AuditEvent["category"] {
+  const exact = exactAuditCategories.get(action);
+  if (exact) return exact;
+  if (action.includes("authentication-method")) return "identity";
+  const prefixed = prefixAuditCategories.find(([prefix]) =>
+    action.startsWith(prefix),
+  )?.[1];
+  if (prefixed) return prefixed;
+  throw new Error(`Audit category unavailable for action: ${action}`);
 }
 
 export async function hasRecentReauthentication(
@@ -113,6 +162,40 @@ export function requiredString(value: unknown, field: string): string {
     throw new Error(`Invalid PostgreSQL ${field}`);
   }
   return value;
+}
+
+export function restrictedSnapshot(
+  value: RestrictedTargetSnapshot,
+  expectedTargetId: string,
+): string {
+  if (
+    !["account", "profile", "public-object", "unavailable"].includes(
+      value.kind,
+    ) ||
+    !bounded(value.targetId, 200) ||
+    value.targetId !== expectedTargetId ||
+    !bounded(value.summary, 2_000) ||
+    !(value.capturedAt instanceof Date) ||
+    Number.isNaN(value.capturedAt.getTime()) ||
+    (value.contentReference !== undefined &&
+      !bounded(value.contentReference, 500))
+  )
+    throw new Error("Restricted target snapshot is invalid");
+  return JSON.stringify({
+    kind: value.kind,
+    targetId: value.targetId,
+    summary: value.summary,
+    capturedAt: value.capturedAt.toISOString(),
+    ...(value.contentReference
+      ? { contentReference: value.contentReference }
+      : {}),
+  });
+}
+
+function bounded(value: unknown, maximum: number): value is string {
+  return (
+    typeof value === "string" && value.length > 0 && value.length <= maximum
+  );
 }
 
 export function requiredBoolean(value: unknown, field: string): boolean {
