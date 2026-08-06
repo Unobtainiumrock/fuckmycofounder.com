@@ -3,7 +3,9 @@ import "server-only";
 import type {
   AuditEvent,
   AuthorizedDurableCommand,
+  ReportReason,
 } from "../../modules/identity-safety/server";
+import { abuseDecision } from "../../modules/identity-safety/server";
 import {
   addDays,
   requireAuthorization,
@@ -64,5 +66,83 @@ export async function persistModerationCaseTransition(input: {
     }
     await writeAudit(tx, input.audit);
     return "committed" as const;
+  });
+}
+
+export async function persistAbuseRiskReview(input: {
+  readonly runner: TransactionRunner;
+  readonly authorization: AuthorizedDurableCommand;
+  readonly actorId: string;
+  readonly reviewId: string;
+  readonly caseId: string;
+  readonly subjectAccountId: string;
+  readonly targetId: string;
+  readonly reason: ReportReason;
+  readonly attempts: number;
+  readonly coordinatedAccounts: number;
+  readonly now: Date;
+  readonly audit: AuditEvent;
+}): Promise<{
+  readonly allowed: boolean;
+  readonly reasonCode: string;
+  readonly caseId: string | null;
+}> {
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "abuse-risk-review",
+    capability: "trust-safety.risk-review",
+    targetKind: "abuse-review",
+    targetId: input.reviewId,
+  });
+  const decision = abuseDecision(input);
+  return input.runner.run(input.audit.id, async (tx) => {
+    const subject = await tx.query<Record<string, unknown>>(
+      "select state from accounts where id=$1 for update",
+      [input.subjectAccountId],
+    );
+    if (!subject.rows[0]) throw new Error("Abuse-review subject unavailable");
+    const routedCaseId = decision.allowed ? null : input.caseId;
+    if (routedCaseId) {
+      await tx.query(
+        `insert into moderation_cases
+         (id,target_id,state,queue,target_snapshot,affected_account_id,created_at)
+         values ($1,$2,'received',$3,$4::jsonb,$5,$6)`,
+        [
+          routedCaseId,
+          input.targetId,
+          input.reason === "sexual-exploitation" ||
+          input.reason === "threat-or-imminent-harm"
+            ? "urgent"
+            : "ordinary",
+          JSON.stringify({
+            kind: "unavailable",
+            targetId: input.targetId,
+            summary: "Restricted automated risk signal",
+            capturedAt: input.now.toISOString(),
+          }),
+          input.subjectAccountId,
+          input.now,
+        ],
+      );
+    }
+    await tx.query(
+      `insert into abuse_reviews
+       (id,subject_account_id,target_id,reason,attempts,coordinated_accounts,decision,reason_code,case_id,created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        input.reviewId,
+        input.subjectAccountId,
+        input.targetId,
+        input.reason,
+        input.attempts,
+        input.coordinatedAccounts,
+        decision.allowed ? "allowed" : "review-required",
+        decision.reasonCode,
+        routedCaseId,
+        input.now,
+      ],
+    );
+    await writeAudit(tx, input.audit);
+    return { ...decision, caseId: routedCaseId };
   });
 }

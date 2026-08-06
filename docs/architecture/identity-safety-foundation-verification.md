@@ -19,17 +19,26 @@ Change: `add-account-identity-and-safety-foundation`
 - Central policy returns allow, safe deny, unmet requirement, or unavailable.
   Durable commands accept an opaque, process-bound authorization capability
   whose actor, action, capability, and target must exactly match before one
-  owned PostgreSQL transaction opens. Canonical lifecycle, recovery, claim,
-  blocking, moderation, enforcement, appeal, retention, and reveal state is
-  then locked and revalidated inside that transaction.
+  owned PostgreSQL transaction opens. Account actions use action-specific
+  lifecycle capabilities, while staff actions use an explicit least-privilege
+  role/action matrix. Canonical lifecycle, recovery, claim, blocking,
+  moderation, enforcement, appeal, retention, and reveal state is then locked
+  and revalidated inside that transaction.
 - Public Byline creation/editing, verified-claim linking, unilateral Account
   blocking, moderation transitions, claim and moderation appeals, recovery,
   deletion finalization, erasure, retention, and legal holds are durable
-  commands rather than in-memory policy helpers. Recovery requires persisted
-  proof and a matured hold, revokes sessions, and requires contact and claim
-  reverification. Deletion finalization is automatic after its deadline and
-  final erasure is blocked until its due date or while an authorized legal hold
-  remains active.
+  commands rather than in-memory policy helpers. Claim submission is an Account
+  action, while verification or rejection requires a separately authorized
+  identity reviewer. Recovery requires persisted proof and a matured hold,
+  revokes sessions, and requires fresh authentication to complete contact and
+  claim reverification. Deletion finalization is automatic after its deadline
+  and final erasure is blocked until its due date or while an authorized legal
+  hold remains active.
+- Moderation Cases bind their affected Account or Profile Claim before an
+  enforcement decision; appeal reversal restores the recorded prior state.
+  Restricted anonymous attribution is bound to the exact stored linkage and
+  documented case. Sexual-exploitation risk signals create an urgent human-
+  review case and never directly mutate content or enforcement state.
 - Append-only audit rows contain only the permanent minimal decision history.
   Restricted audit evidence is stored separately with an expiry and scoped
   legal-hold state. Rejected audit mutation proof executes the forbidden write

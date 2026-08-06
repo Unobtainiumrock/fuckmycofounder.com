@@ -6,9 +6,9 @@ import type {
   AuditEvent,
   AuthorizedDurableCommand,
   EnforcementAction,
-  ProfileClaim,
   RestrictedModerationCaseRecord,
   RestrictedReportRecord,
+  RestrictedTargetSnapshot,
   RestrictedField,
 } from "../../modules/identity-safety/server";
 import { restrictedAttributionFromAuditedRecord } from "../../modules/identity-safety/server";
@@ -19,80 +19,10 @@ import {
   writeAudit,
   writeNotice,
 } from "./identity-safety-persistence-support";
-import type { TransactionRunner } from "./transaction-runner";
-
-export async function persistProfileClaim(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly actorId: string;
-  readonly claim: ProfileClaim;
-  readonly reviewerId: string | null;
-  readonly encryptedEvidence: Uint8Array | null;
-  readonly challenge?: {
-    readonly id: string;
-    readonly challengerAccountId: string;
-  };
-  readonly audit: AuditEvent;
-}): Promise<void> {
-  requireAuthorization(input.authorization, {
-    actorId: input.actorId,
-    action: "profile-claim-write",
-    capability: "profile-claim.write",
-    targetKind: "claim",
-    targetId: input.claim.id,
-  });
-  if (input.claim.state !== "pending" && !input.reviewerId) {
-    throw new Error("Final Profile Claim decisions require a reviewer");
-  }
-  await input.runner.run(input.audit.id, async (tx) => {
-    await tx.query(
-      `insert into profile_claims (id,account_id,profile_id,state,evidence_kind,encrypted_evidence,decided_at,evidence_expires_at,original_reviewer_id,appeal_deadline)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       on conflict (id) do update set state=excluded.state, decided_at=excluded.decided_at, evidence_expires_at=excluded.evidence_expires_at, original_reviewer_id=excluded.original_reviewer_id, appeal_deadline=excluded.appeal_deadline`,
-      [
-        input.claim.id,
-        input.claim.accountId,
-        input.claim.profileId,
-        input.claim.state,
-        input.claim.evidenceKind,
-        input.encryptedEvidence,
-        input.claim.state === "pending" ? null : input.claim.decidedAt,
-        input.claim.state === "pending" ? null : input.claim.evidenceExpiresAt,
-        input.reviewerId,
-        input.claim.state === "pending" ? null : input.claim.appealDeadline,
-      ],
-    );
-    if (input.challenge) {
-      await tx.query(
-        "insert into claim_challenges (id,claim_id,challenger_account_id,state,created_at) values ($1,$2,$3,'open',$4)",
-        [
-          input.challenge.id,
-          input.claim.id,
-          input.challenge.challengerAccountId,
-          input.audit.occurredAt,
-        ],
-      );
-    }
-    if (input.claim.state === "revoked") {
-      await tx.query(
-        "update public_bylines set claimed_profile=false, profile_id=null where account_id=$1",
-        [input.claim.accountId],
-      );
-      await tx.query(
-        "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
-        [input.claim.accountId, input.audit.occurredAt],
-      );
-    }
-    await writeNotice(tx, {
-      id: `${input.claim.id}:notice:${input.claim.state}`,
-      accountId: input.claim.accountId,
-      kind: `claim-${input.claim.state}`,
-      message: `Profile Claim ${input.claim.state}.`,
-      now: input.audit.occurredAt,
-    });
-    await writeAudit(tx, input.audit);
-  });
-}
+import type {
+  TransactionContext,
+  TransactionRunner,
+} from "./transaction-runner";
 
 export async function persistReportAndCase(input: {
   readonly runner: TransactionRunner;
@@ -100,9 +30,11 @@ export async function persistReportAndCase(input: {
   readonly actorId: string;
   readonly report: RestrictedReportRecord;
   readonly moderationCase: RestrictedModerationCaseRecord;
-  readonly targetSnapshot: Readonly<Record<string, unknown>>;
+  readonly targetAccountId: string;
+  readonly targetClaimId?: string;
+  readonly targetSnapshot: RestrictedTargetSnapshot;
   readonly audit: AuditEvent;
-}): Promise<void> {
+}): Promise<"committed" | "ineligible"> {
   requireAuthorization(input.authorization, {
     actorId: input.actorId,
     action: "report-create",
@@ -110,11 +42,26 @@ export async function persistReportAndCase(input: {
     targetKind: "report",
     targetId: input.report.id,
   });
-  const targetSnapshot = restrictedSnapshot(input.targetSnapshot);
-  await input.runner.run(input.audit.id, async (tx) => {
+  if (input.actorId !== input.report.reporterAccountId)
+    throw new Error("Report actor must match reporter identity");
+  if (
+    input.moderationCase.id !== input.report.caseId ||
+    input.moderationCase.targetId !== input.report.targetId
+  )
+    return "ineligible";
+  const targetSnapshot = restrictedSnapshot(
+    input.targetSnapshot,
+    input.report.targetId,
+  );
+  return input.runner.run(input.audit.id, async (tx) => {
+    const reporter = await tx.query<Record<string, unknown>>(
+      "select state from accounts where id=$1 for update",
+      [input.actorId],
+    );
+    if (reporter.rows[0]?.state !== "active") return "ineligible" as const;
     await tx.query(
-      `insert into moderation_cases (id,target_id,state,queue,target_snapshot,created_at,evidence_expires_at) values ($1,$2,$3,$4,$5::jsonb,$6,$7)
-       on conflict (id) do update set state=excluded.state, queue=excluded.queue`,
+      `insert into moderation_cases (id,target_id,state,queue,target_snapshot,created_at,evidence_expires_at,affected_account_id,affected_claim_id) values ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9)
+       on conflict (id) do nothing`,
       [
         input.moderationCase.id,
         input.moderationCase.targetId,
@@ -123,8 +70,23 @@ export async function persistReportAndCase(input: {
         targetSnapshot,
         input.report.createdAt,
         null,
+        input.targetAccountId,
+        input.targetClaimId ?? null,
       ],
     );
+    const canonicalCase = await tx.query<Record<string, unknown>>(
+      "select target_id,affected_account_id,affected_claim_id,state from moderation_cases where id=$1 for update",
+      [input.moderationCase.id],
+    );
+    const caseRow = canonicalCase.rows[0];
+    if (
+      !caseRow ||
+      caseRow.target_id !== input.report.targetId ||
+      caseRow.affected_account_id !== input.targetAccountId ||
+      (caseRow.affected_claim_id ?? null) !== (input.targetClaimId ?? null) ||
+      caseRow.state === "closed"
+    )
+      return "ineligible" as const;
     await tx.query(
       `insert into reports (id,case_id,reporter_account_id,target_id,reason,private_context,evidence_references,created_at,expires_at)
        values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) on conflict (case_id,reporter_account_id,target_id,reason) do nothing`,
@@ -141,6 +103,7 @@ export async function persistReportAndCase(input: {
       ],
     );
     await writeAudit(tx, input.audit);
+    return "committed" as const;
   });
 }
 
@@ -152,11 +115,11 @@ export async function persistEnforcement(input: {
   readonly id: string;
   readonly caseId: string;
   readonly targetId: string;
-  readonly affectedAccountId: string;
-  readonly affectedClaimId?: string;
   readonly action: EnforcementAction;
   readonly audit: AuditEvent;
 }): Promise<"committed" | "ineligible"> {
+  if (input.actorId !== input.reviewerId)
+    throw new Error("Enforcement actor must match the deciding reviewer");
   requireAuthorization(input.authorization, {
     actorId: input.actorId,
     action: "moderation-enforce",
@@ -165,17 +128,10 @@ export async function persistEnforcement(input: {
     targetId: input.caseId,
   });
   return input.runner.run(input.audit.id, async (tx) => {
-    const moderationCase = await tx.query<Record<string, unknown>>(
-      "select state,target_id from moderation_cases where id=$1 for update",
-      [input.caseId],
-    );
-    if (
-      moderationCase.rows[0]?.state !== "investigating" ||
-      moderationCase.rows[0]?.target_id !== input.targetId
-    )
-      return "ineligible" as const;
+    const target = await loadEnforcementTarget(tx, input);
+    if (!target) return "ineligible" as const;
     await tx.query(
-      "insert into enforcement_actions (id,case_id,outcome,policy_reason,effective_at,scope_or_duration,appeal_deadline,affected_account_id) values ($1,$2,$3,$4,$5,$6,$7,$8)",
+      "insert into enforcement_actions (id,case_id,outcome,policy_reason,effective_at,scope_or_duration,appeal_deadline,affected_account_id,affected_claim_id,prior_account_state,prior_claim_state) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
       [
         input.id,
         input.caseId,
@@ -184,7 +140,10 @@ export async function persistEnforcement(input: {
         input.action.effectiveAt,
         input.action.scopeOrDuration,
         input.action.appealable ? addDays(input.action.effectiveAt, 30) : null,
-        input.affectedAccountId,
+        target.accountId,
+        target.claimId,
+        target.priorAccountState,
+        target.priorClaimState,
       ],
     );
     await tx.query(
@@ -200,51 +159,117 @@ export async function persistEnforcement(input: {
       input.caseId,
       addDays(input.action.effectiveAt, 730),
     ]);
-    if (
-      input.action.outcome === "account-limited" ||
-      input.action.outcome === "account-suspended"
-    ) {
-      await tx.query("update accounts set state=$2 where id=$1", [
-        input.affectedAccountId,
-        input.action.outcome === "account-limited" ? "limited" : "suspended",
-      ]);
-      if (input.action.outcome === "account-suspended")
-        await tx.query(
-          "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
-          [input.affectedAccountId, input.action.effectiveAt],
-        );
-    }
-    if (
-      input.action.outcome === "profile-claim-revoked" &&
-      input.affectedClaimId
-    ) {
-      await tx.query(
-        "update profile_claims set state='revoked', decided_at=$2, evidence_expires_at=$3 where id=$1",
-        [
-          input.affectedClaimId,
-          input.action.effectiveAt,
-          addDays(input.action.effectiveAt, 90),
-        ],
-      );
-      await tx.query(
-        "update public_bylines set claimed_profile=false, profile_id=null where account_id=$1",
-        [input.affectedAccountId],
-      );
-      await tx.query(
-        "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
-        [input.affectedAccountId, input.action.effectiveAt],
-      );
-    }
+    await applyEnforcementEffects(tx, input, target);
     await writeNotice(tx, {
       id: `${input.id}:notice`,
-      accountId: input.affectedAccountId,
+      accountId: target.accountId,
       kind: "enforcement",
-      message: `Target ${input.caseId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}; appeal ${input.action.appealable ? "available for 30 days" : "not available"}.`,
+      message: `Target ${input.targetId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}; appeal ${input.action.appealable ? "available for 30 days" : "not available"}.`,
       now: input.action.effectiveAt,
     });
     await writeAudit(tx, input.audit);
     return "committed" as const;
   });
+}
+
+interface EnforcementTarget {
+  readonly accountId: string;
+  readonly claimId: string | null;
+  readonly priorAccountState: string;
+  readonly priorClaimState: string | null;
+}
+
+async function loadEnforcementTarget(
+  tx: TransactionContext,
+  input: Parameters<typeof persistEnforcement>[0],
+): Promise<EnforcementTarget | null> {
+  const result = await tx.query<Record<string, unknown>>(
+    "select state,target_id,affected_account_id,affected_claim_id from moderation_cases where id=$1 for update",
+    [input.caseId],
+  );
+  const row = result.rows[0];
+  if (
+    row?.state !== "investigating" ||
+    row.target_id !== input.targetId ||
+    typeof row.affected_account_id !== "string"
+  )
+    return null;
+  const accountId = row.affected_account_id;
+  const claimId =
+    typeof row.affected_claim_id === "string" ? row.affected_claim_id : null;
+  const account = await tx.query<Record<string, unknown>>(
+    "select state from accounts where id=$1 for update",
+    [accountId],
+  );
+  if (typeof account.rows[0]?.state !== "string") return null;
+  let priorClaimState: string | null = null;
+  if (input.action.outcome === "profile-claim-revoked") {
+    if (!claimId) return null;
+    const claim = await tx.query<Record<string, unknown>>(
+      "select account_id,state from profile_claims where id=$1 for update",
+      [claimId],
+    );
+    if (
+      claim.rows[0]?.account_id !== accountId ||
+      typeof claim.rows[0]?.state !== "string"
+    )
+      return null;
+    priorClaimState = claim.rows[0].state;
+  }
+  return {
+    accountId,
+    claimId,
+    priorAccountState: account.rows[0].state,
+    priorClaimState,
+  };
+}
+
+async function applyEnforcementEffects(
+  tx: TransactionContext,
+  input: Parameters<typeof persistEnforcement>[0],
+  target: EnforcementTarget,
+): Promise<void> {
+  if (
+    input.action.outcome === "account-limited" ||
+    input.action.outcome === "account-suspended"
+  ) {
+    await tx.query("update accounts set state=$2 where id=$1", [
+      target.accountId,
+      input.action.outcome === "account-limited" ? "limited" : "suspended",
+    ]);
+    if (input.action.outcome === "account-suspended")
+      await revokeAccountSessions(
+        tx,
+        target.accountId,
+        input.action.effectiveAt,
+      );
+  }
+  if (input.action.outcome !== "profile-claim-revoked" || !target.claimId)
+    return;
+  await tx.query(
+    "update profile_claims set state='revoked', decided_at=$2, evidence_expires_at=$3 where id=$1",
+    [
+      target.claimId,
+      input.action.effectiveAt,
+      addDays(input.action.effectiveAt, 90),
+    ],
+  );
+  await tx.query(
+    "update public_bylines set claimed_profile=false, profile_id=null where account_id=$1",
+    [target.accountId],
+  );
+  await revokeAccountSessions(tx, target.accountId, input.action.effectiveAt);
+}
+
+async function revokeAccountSessions(
+  tx: TransactionContext,
+  accountId: string,
+  now: Date,
+): Promise<void> {
+  await tx.query(
+    "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
+    [accountId, now],
+  );
 }
 
 export async function recordRestrictedReveal(input: {
@@ -254,6 +279,7 @@ export async function recordRestrictedReveal(input: {
   readonly actorId: string;
   readonly approverId: string;
   readonly caseReason: string;
+  readonly linkageId: string;
   readonly field: RestrictedField;
   readonly audit: AuditEvent;
 }): Promise<{ readonly revealId: string; readonly auditId: string }> {
@@ -261,21 +287,29 @@ export async function recordRestrictedReveal(input: {
     actorId: input.actorId,
     action: "restricted-reveal",
     capability: `restricted.${input.field}`,
-    targetKind: "case",
-    targetId: input.caseReason,
+    targetKind: "anonymous-linkage",
+    targetId: input.linkageId,
+    purpose: input.caseReason,
   });
   if (!input.actorId || !input.approverId || !input.caseReason)
     throw new Error("Restricted reveal requires actor, approver, and reason");
   await input.runner.run(input.audit.id, async (tx) => {
+    const linkage = await tx.query<Record<string, unknown>>(
+      "select id from anonymous_linkages where id=$1 for update",
+      [input.linkageId],
+    );
+    if (!linkage.rows[0])
+      throw new Error("Restricted reveal linkage is unavailable");
     await writeAudit(tx, input.audit);
     await tx.query(
-      "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,allowed,audit_id,created_at) values ($1,$2,$3,$4,$5,true,$6,$7)",
+      "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,linkage_id,allowed,audit_id,created_at) values ($1,$2,$3,$4,$5,$6,true,$7,$8)",
       [
         input.id,
         input.actorId,
         input.approverId,
         input.caseReason,
         input.field,
+        input.linkageId,
         input.audit.id,
         input.audit.occurredAt,
       ],
@@ -328,6 +362,7 @@ export async function loadRestrictedAttributionProjection(input: {
   readonly actorId: string;
   readonly revealId: string;
   readonly linkageId: string;
+  readonly caseReason: string;
   readonly audit: AuditEvent;
 }): Promise<
   | { readonly kind: "not-authorized" }
@@ -341,17 +376,18 @@ export async function loadRestrictedAttributionProjection(input: {
     actorId: input.actorId,
     action: "restricted-reveal-project",
     capability: "restricted.anonymous-author-linkage",
-    targetKind: "reveal",
-    targetId: input.revealId,
+    targetKind: "anonymous-linkage",
+    targetId: input.linkageId,
+    purpose: input.caseReason,
   });
   return input.runner.run(input.audit.id, async (tx) => {
     const result = await tx.query<Record<string, unknown>>(
       `select r.case_reason,r.audit_id,l.account_id
        from restricted_reveals r
        join identity_safety_audit a on a.id=r.audit_id
-       join anonymous_linkages l on l.id=$2
-       where r.id=$1 and r.actor_id=$3 and r.allowed=true and r.field_class='anonymous-author-linkage'`,
-      [input.revealId, input.linkageId, input.actorId],
+       join anonymous_linkages l on l.id=r.linkage_id
+       where r.id=$1 and r.linkage_id=$2 and r.actor_id=$3 and r.case_reason=$4 and r.allowed=true and r.field_class='anonymous-author-linkage'`,
+      [input.revealId, input.linkageId, input.actorId, input.caseReason],
     );
     const row = result.rows[0];
     if (!row) return { kind: "not-authorized" as const };
@@ -378,6 +414,7 @@ export {
   persistClaimAppeal,
   persistClaimAppealDecision,
 } from "./identity-safety-appeals";
+export { persistProfileClaim } from "./identity-safety-claim-commands";
 
 export {
   finalizePrivateIdentityErasure,
@@ -387,16 +424,47 @@ export {
   persistAuthenticationMethodChange,
   persistRecoveryDecision,
 } from "./identity-safety-account-commands";
+export { persistRecoveryReverification } from "./identity-safety-reverification-commands";
 export {
   persistAccountBlock,
   persistBylineClaimLink,
   persistPublicByline,
 } from "./identity-safety-public-commands";
-export { persistModerationCaseTransition } from "./identity-safety-moderation-commands";
+export {
+  persistAbuseRiskReview,
+  persistModerationCaseTransition,
+} from "./identity-safety-moderation-commands";
 
-function restrictedSnapshot(value: Readonly<Record<string, unknown>>): string {
-  const serialized = JSON.stringify(value);
-  if (!serialized || serialized.length > 100_000)
+function restrictedSnapshot(
+  value: RestrictedTargetSnapshot,
+  expectedTargetId: string,
+): string {
+  if (
+    !["account", "profile", "public-object", "unavailable"].includes(
+      value.kind,
+    ) ||
+    !bounded(value.targetId, 200) ||
+    value.targetId !== expectedTargetId ||
+    !bounded(value.summary, 2_000) ||
+    !(value.capturedAt instanceof Date) ||
+    Number.isNaN(value.capturedAt.getTime()) ||
+    (value.contentReference !== undefined &&
+      !bounded(value.contentReference, 500))
+  )
     throw new Error("Restricted target snapshot is invalid");
-  return serialized;
+  return JSON.stringify({
+    kind: value.kind,
+    targetId: value.targetId,
+    summary: value.summary,
+    capturedAt: value.capturedAt.toISOString(),
+    ...(value.contentReference
+      ? { contentReference: value.contentReference }
+      : {}),
+  });
+}
+
+function bounded(value: unknown, maximum: number): value is string {
+  return (
+    typeof value === "string" && value.length > 0 && value.length <= maximum
+  );
 }

@@ -146,10 +146,19 @@ export interface RestrictedReportRecord {
   readonly createdAt: Date;
 }
 
+export interface RestrictedTargetSnapshot {
+  readonly kind: "account" | "profile" | "public-object" | "unavailable";
+  readonly targetId: string;
+  readonly summary: string;
+  readonly capturedAt: Date;
+  readonly contentReference?: string;
+}
+
 export type ReportReason =
   | "impersonation"
   | "harassment"
   | "private-contact-information"
+  | "sexual-exploitation"
   | "threat-or-imminent-harm"
   | "spam"
   | "evasion"

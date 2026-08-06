@@ -1,6 +1,6 @@
 import "server-only";
 
-// source-size: reason=Account persistence keeps lifecycle, recovery, authentication, byline, and blocking invariants together
+// source-size: reason=Account persistence keeps authentication, lifecycle, recovery, export, and erasure scheduling invariants together
 
 import type {
   Account,
@@ -80,8 +80,8 @@ export async function persistAuthenticatedAccount(input: {
       );
     }
     await tx.query(
-      "insert into account_sessions (id,account_id) values ($1,$2)",
-      [input.sessionId, input.account.id],
+      "insert into account_sessions (id,account_id,reauthenticated_at) values ($1,$2,$3)",
+      [input.sessionId, input.account.id, input.method.verifiedAt],
     );
     await writeAudit(tx, input.audit);
     return "committed" as const;
@@ -210,6 +210,10 @@ export async function persistRecoveryDecision(input: {
         );
         await tx.query(
           "update profile_claims set reverify_required=true where account_id=$1 and state='verified'",
+          [accountId],
+        );
+        await tx.query(
+          "update public_bylines set claimed_profile=false,profile_id=null where account_id=$1",
           [accountId],
         );
         await writeNotice(tx, {

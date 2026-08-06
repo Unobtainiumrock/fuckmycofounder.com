@@ -5,6 +5,8 @@ import {
   appealCase,
   applyEnforcement,
   authorizeDurableCommand,
+  authorizeStaffCommand,
+  authorizeStaffIdentityProof,
   blockApplies,
   evaluatePolicy,
   intakeReport,
@@ -34,7 +36,7 @@ const other: Account = {
 describe("centralized policy", () => {
   const base = {
     account,
-    action: "interact",
+    action: "report-create",
     blocked: false,
     capabilityEligible: true,
     policyAvailable: true,
@@ -48,41 +50,41 @@ describe("centralized policy", () => {
       authorizeDurableCommand({
         context: base,
         decisionId: "decision-a",
-        capability: "report",
-        targetKind: "content",
-        targetId: "content-a",
+        capability: "trust-safety.report",
+        targetKind: "report",
+        targetId: "report-a",
       }),
     ).toMatchObject({
       kind: "authorized-durable-command",
       actorId: "account-a",
       policyVersion: "identity-safety-v1",
-      targetId: "content-a",
+      targetId: "report-a",
     });
     expect(
       authorizeDurableCommand({
         context: { ...base, account: null },
         decisionId: "decision-b",
-        capability: "report",
-        targetKind: "content",
-        targetId: "content-a",
+        capability: "trust-safety.report",
+        targetKind: "report",
+        targetId: "report-a",
       }),
     ).toEqual({ kind: "deny", code: "action-not-available" });
     const issued = authorizeDurableCommand({
       context: base,
       decisionId: "decision-c",
-      capability: "report",
-      targetKind: "content",
-      targetId: "content-a",
+      capability: "trust-safety.report",
+      targetKind: "report",
+      targetId: "report-a",
     });
     expect(issued.kind).toBe("authorized-durable-command");
     if (issued.kind !== "authorized-durable-command") return;
     expect(
       matchesAuthorizedDurableCommand(issued, {
         actorId: account.id,
-        action: "interact",
-        capability: "report",
-        targetKind: "content",
-        targetId: "content-a",
+        action: "report-create",
+        capability: "trust-safety.report",
+        targetKind: "report",
+        targetId: "report-a",
       }),
     ).toBe(true);
     expect(
@@ -132,6 +134,107 @@ describe("centralized policy", () => {
       expect(JSON.stringify(result)).not.toContain(state);
     },
   );
+
+  it.each([
+    ["limited", "account-export", "account.export"],
+    ["suspended", "moderation-appeal", "trust-safety.appeal"],
+    ["deletion-pending", "cancel-deletion", "account.lifecycle"],
+  ] as const)(
+    "allows the explicit restricted capability for %s",
+    (state, action, capability) => {
+      expect(
+        authorizeDurableCommand({
+          context: {
+            ...base,
+            action,
+            account: accountInState(state),
+          },
+          decisionId: `${state}:${action}`,
+          capability,
+          targetKind: "account",
+          targetId: account.id,
+        }),
+      ).toMatchObject({ kind: "authorized-durable-command" });
+    },
+  );
+
+  it("does not let an ordinary Account mint privileged commands", () => {
+    expect(
+      authorizeDurableCommand({
+        context: { ...base, action: "moderation-enforce" },
+        decisionId: "forged-moderation",
+        capability: "trust-safety.enforce",
+        targetKind: "case",
+        targetId: "case-a",
+      }),
+    ).toEqual({ kind: "deny", code: "action-not-available" });
+  });
+
+  it.each([
+    ["support", "moderation-enforce", "trust-safety.enforce", false],
+    ["moderator", "moderation-enforce", "trust-safety.enforce", true],
+    ["identity-reviewer", "profile-claim-decide", "profile-claim.decide", true],
+    ["legal", "legal-hold-apply", "retention.legal-hold", true],
+    ["recovery-reviewer", "recovery-approved", "account.recovery", true],
+    ["retention-worker", "retention-run", "retention.execute", true],
+    ["system", "abuse-risk-review", "trust-safety.risk-review", true],
+  ] as const)(
+    "applies least-privilege grants for %s",
+    (role, action, capability, allowed) => {
+      const proof = authorizeStaffIdentityProof({
+        actorId: `${role}-a`,
+        role,
+        identityVerified: true,
+      });
+      if ("kind" in proof) throw new Error("staff fixture proof denied");
+      const result = authorizeStaffCommand({
+        proof,
+        context: {
+          ...base,
+          account: { ...account, id: proof.actorId },
+          action,
+        },
+        decisionId: `${role}:${action}`,
+        capability,
+        targetKind: "operation",
+        targetId: "target-a",
+      });
+      expect(result.kind).toBe(allowed ? "authorized-durable-command" : "deny");
+    },
+  );
+
+  it("requires both role grant and approved purpose for restricted reveal", () => {
+    const unapproved = authorizeStaffIdentityProof({
+      actorId: "moderator-a",
+      role: "moderator",
+      identityVerified: true,
+    });
+    const approved = authorizeStaffIdentityProof({
+      actorId: "moderator-a",
+      role: "moderator",
+      identityVerified: true,
+      restrictedAccessApproved: true,
+    });
+    if ("kind" in unapproved || "kind" in approved)
+      throw new Error("staff fixture proof denied");
+    const command = (proof: typeof approved, purpose?: string) =>
+      authorizeStaffCommand({
+        proof,
+        context: {
+          ...base,
+          account: { ...account, id: proof.actorId },
+          action: "restricted-reveal",
+        },
+        decisionId: `reveal:${purpose ?? "none"}`,
+        capability: "restricted.anonymous-author-linkage",
+        targetKind: "anonymous-linkage",
+        targetId: "linkage-a",
+        ...(purpose ? { purpose } : {}),
+      });
+    expect(command(unapproved, "case-a").kind).toBe("deny");
+    expect(command(approved).kind).toBe("deny");
+    expect(command(approved, "case-a").kind).toBe("authorized-durable-command");
+  });
 });
 
 describe("blocking", () => {
@@ -333,6 +436,19 @@ describe("reports, moderation, enforcement, and appeals", () => {
     ).toEqual({
       allowed: false,
       reasonCode: "coordinated-abuse",
+    });
+  });
+
+  it("routes sexual exploitation for review without waiting for a rate threshold", () => {
+    expect(
+      abuseDecision({
+        reason: "sexual-exploitation",
+        attempts: 1,
+        coordinatedAccounts: 1,
+      }),
+    ).toEqual({
+      allowed: false,
+      reasonCode: "conduct:sexual-exploitation",
     });
   });
 });

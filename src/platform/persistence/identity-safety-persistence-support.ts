@@ -13,6 +13,7 @@ interface AuthorizationBinding {
   readonly capability: string;
   readonly targetKind: string;
   readonly targetId: string;
+  readonly purpose?: string;
 }
 
 export function requireAuthorization(
@@ -68,6 +69,25 @@ export async function writeAudit(
       ],
     );
   }
+}
+
+export async function hasRecentReauthentication(
+  tx: TransactionContext,
+  input: {
+    readonly accountId: string;
+    readonly sessionId: string;
+    readonly now: Date;
+  },
+): Promise<boolean> {
+  const result = await tx.query<Record<string, unknown>>(
+    `select reauthenticated_at from account_sessions
+     where id=$1 and account_id=$2 and revoked_at is null for update`,
+    [input.sessionId, input.accountId],
+  );
+  const value = result.rows[0]?.reauthenticated_at;
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return false;
+  const age = input.now.getTime() - value.getTime();
+  return age >= 0 && age <= 15 * 60_000;
 }
 
 export function requiredDate(value: unknown, field: string): Date {

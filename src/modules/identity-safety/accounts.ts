@@ -334,7 +334,7 @@ export function capabilitiesFor(
     case "suspended":
       return ["appeal", "delete-account", "export-data", "read-notices"];
     case "deletion-pending":
-      return ["appeal", "export-data", "read-notices"];
+      return ["appeal", "delete-account", "export-data", "read-notices"];
     case "deleted":
       return [];
   }

@@ -1,5 +1,7 @@
 import "server-only";
 
+// source-size: reason=appeal persistence keeps canonical case, enforcement, reversal effects, notices, and audit history in one transaction boundary
+
 import type {
   AuditEvent,
   AuthorizedDurableCommand,
@@ -14,7 +16,10 @@ import {
   writeAudit,
   writeNotice,
 } from "./identity-safety-persistence-support";
-import type { TransactionRunner } from "./transaction-runner";
+import type {
+  TransactionContext,
+  TransactionRunner,
+} from "./transaction-runner";
 
 export async function persistClaimAppeal(input: {
   readonly runner: TransactionRunner;
@@ -242,7 +247,6 @@ export async function persistAppealDecision(input: {
   readonly appealId: string;
   readonly newEnforcementId: string;
   readonly action: EnforcementAction;
-  readonly resultingAccountState?: "active" | "limited" | "suspended";
   readonly audit: AuditEvent;
 }): Promise<"committed" | "ineligible"> {
   requireAuthorization(input.authorization, {
@@ -253,42 +257,22 @@ export async function persistAppealDecision(input: {
     targetId: input.appealId,
   });
   return input.runner.run(input.audit.id, async (tx) => {
-    const result = await tx.query<Record<string, unknown>>(
-      `select a.case_id,a.appellant_account_id,a.reviewer_id,a.original_enforcement_id,a.state,
-              e.case_id original_case_id
-       from appeals a join enforcement_actions e on e.id=a.original_enforcement_id
-       join moderation_cases c on c.id=a.case_id
-       where a.id=$1 for update of a,c,e`,
-      [input.appealId],
-    );
-    const appeal = result.rows[0];
-    if (
-      !appeal ||
-      appeal.state !== "pending" ||
-      appeal.reviewer_id !== input.actorId ||
-      appeal.case_id !== appeal.original_case_id
-    )
-      return "ineligible" as const;
-    const caseId = requiredString(appeal.case_id, "appeals.case_id");
-    const accountId = requiredString(
-      appeal.appellant_account_id,
-      "appeals.appellant_account_id",
-    );
-    const originalEnforcementId = requiredString(
-      appeal.original_enforcement_id,
-      "appeals.original_enforcement_id",
-    );
+    const target = await loadAppealDecisionTarget(tx, input);
+    if (!target) return "ineligible" as const;
     await tx.query(
-      "insert into enforcement_actions (id,case_id,outcome,policy_reason,effective_at,scope_or_duration,appeal_deadline,affected_account_id) values ($1,$2,$3,$4,$5,$6,$7,$8)",
+      "insert into enforcement_actions (id,case_id,outcome,policy_reason,effective_at,scope_or_duration,appeal_deadline,affected_account_id,affected_claim_id,prior_account_state,prior_claim_state) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
       [
         input.newEnforcementId,
-        caseId,
+        target.caseId,
         input.action.outcome,
         input.action.policyReason,
         input.action.effectiveAt,
         input.action.scopeOrDuration,
         input.action.appealable ? addDays(input.action.effectiveAt, 30) : null,
-        accountId,
+        target.accountId,
+        target.claimId,
+        target.priorAccountState,
+        target.priorClaimState,
       ],
     );
     await tx.query(
@@ -296,7 +280,7 @@ export async function persistAppealDecision(input: {
       [
         input.id,
         input.appealId,
-        originalEnforcementId,
+        target.originalEnforcementId,
         input.newEnforcementId,
         input.actorId,
         input.action.effectiveAt,
@@ -308,35 +292,156 @@ export async function persistAppealDecision(input: {
     await tx.query(
       "update moderation_cases set state='resolved',appeal_active=false,resolved_at=$2,evidence_expires_at=$3 where id=$1",
       [
-        caseId,
+        target.caseId,
         input.action.effectiveAt,
         addDays(input.action.effectiveAt, 730),
       ],
     );
     await tx.query(
       "update reports set expires_at=$2,appeal_active=false where case_id=$1",
-      [caseId, addDays(input.action.effectiveAt, 730)],
+      [target.caseId, addDays(input.action.effectiveAt, 730)],
     );
-    if (input.resultingAccountState) {
-      await tx.query("update accounts set state=$2 where id=$1", [
-        accountId,
-        input.resultingAccountState,
-      ]);
-      if (input.resultingAccountState === "suspended") {
-        await tx.query(
-          "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
-          [accountId, input.action.effectiveAt],
-        );
-      }
-    }
+    await applyAppealDecisionEffects(tx, input, target);
     await writeNotice(tx, {
       id: `${input.id}:notice`,
-      accountId,
+      accountId: target.accountId,
       kind: "appeal-decision",
-      message: `Target ${caseId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}.`,
+      message: `Target ${target.targetId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}.`,
       now: input.action.effectiveAt,
     });
     await writeAudit(tx, input.audit);
     return "committed" as const;
   });
+}
+
+interface AppealDecisionTarget {
+  readonly caseId: string;
+  readonly accountId: string;
+  readonly claimId: string | null;
+  readonly targetId: string;
+  readonly originalEnforcementId: string;
+  readonly originalOutcome: unknown;
+  readonly priorAccountState: unknown;
+  readonly priorClaimState: unknown;
+}
+
+async function loadAppealDecisionTarget(
+  tx: TransactionContext,
+  input: Parameters<typeof persistAppealDecision>[0],
+): Promise<AppealDecisionTarget | null> {
+  const result = await tx.query<Record<string, unknown>>(
+    `select a.case_id,a.appellant_account_id,a.reviewer_id,a.original_enforcement_id,a.state,
+            e.case_id original_case_id,e.outcome original_outcome,e.affected_account_id,
+            e.affected_claim_id,e.prior_account_state,e.prior_claim_state,c.target_id
+     from appeals a join enforcement_actions e on e.id=a.original_enforcement_id
+     join moderation_cases c on c.id=a.case_id
+     where a.id=$1 for update of a,c,e`,
+    [input.appealId],
+  );
+  const row = result.rows[0];
+  if (
+    !row ||
+    row.state !== "pending" ||
+    row.reviewer_id !== input.actorId ||
+    row.case_id !== row.original_case_id
+  )
+    return null;
+  const accountId = requiredString(
+    row.affected_account_id,
+    "enforcement_actions.affected_account_id",
+  );
+  if (row.appellant_account_id !== accountId) return null;
+  const account = await tx.query<Record<string, unknown>>(
+    "select state from accounts where id=$1 for update",
+    [accountId],
+  );
+  if (!account.rows[0]) return null;
+  const claimId =
+    typeof row.affected_claim_id === "string" ? row.affected_claim_id : null;
+  if (input.action.outcome === "profile-claim-revoked" && !claimId) return null;
+  if (claimId) {
+    const claim = await tx.query<Record<string, unknown>>(
+      "select account_id,state from profile_claims where id=$1 for update",
+      [claimId],
+    );
+    if (claim.rows[0]?.account_id !== accountId) return null;
+  }
+  return {
+    caseId: requiredString(row.case_id, "appeals.case_id"),
+    accountId,
+    claimId,
+    targetId: requiredString(row.target_id, "moderation_cases.target_id"),
+    originalEnforcementId: requiredString(
+      row.original_enforcement_id,
+      "appeals.original_enforcement_id",
+    ),
+    originalOutcome: row.original_outcome,
+    priorAccountState: row.prior_account_state,
+    priorClaimState: row.prior_claim_state,
+  };
+}
+
+async function applyAppealDecisionEffects(
+  tx: TransactionContext,
+  input: Parameters<typeof persistAppealDecision>[0],
+  target: AppealDecisionTarget,
+): Promise<void> {
+  const accountState = accountStateForAppealOutcome({
+    newOutcome: input.action.outcome,
+    originalOutcome: target.originalOutcome,
+    priorState: target.priorAccountState,
+  });
+  if (accountState) {
+    await tx.query("update accounts set state=$2 where id=$1", [
+      target.accountId,
+      accountState,
+    ]);
+    if (accountState === "suspended")
+      await tx.query(
+        "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
+        [target.accountId, input.action.effectiveAt],
+      );
+  }
+  if (input.action.outcome === "profile-claim-revoked" && target.claimId) {
+    await tx.query(
+      "update profile_claims set state='revoked',decided_at=$2,evidence_expires_at=$3 where id=$1",
+      [
+        target.claimId,
+        input.action.effectiveAt,
+        addDays(input.action.effectiveAt, 90),
+      ],
+    );
+    await tx.query(
+      "update public_bylines set claimed_profile=false,profile_id=null where account_id=$1",
+      [target.accountId],
+    );
+    return;
+  }
+  if (
+    target.originalOutcome === "profile-claim-revoked" &&
+    target.claimId &&
+    typeof target.priorClaimState === "string"
+  )
+    await tx.query("update profile_claims set state=$2 where id=$1", [
+      target.claimId,
+      target.priorClaimState,
+    ]);
+}
+
+function accountStateForAppealOutcome(input: {
+  readonly newOutcome: EnforcementAction["outcome"];
+  readonly originalOutcome: unknown;
+  readonly priorState: unknown;
+}): "active" | "limited" | "suspended" | null {
+  if (input.newOutcome === "account-limited") return "limited";
+  if (input.newOutcome === "account-suspended") return "suspended";
+  if (
+    (input.originalOutcome === "account-limited" ||
+      input.originalOutcome === "account-suspended") &&
+    (input.priorState === "active" ||
+      input.priorState === "limited" ||
+      input.priorState === "suspended")
+  )
+    return input.priorState;
+  return null;
 }
