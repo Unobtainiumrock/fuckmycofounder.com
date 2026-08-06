@@ -83,7 +83,7 @@ export function publicBylineProjection(
     kind: "named",
     displayName: byline.displayName,
     ...(byline.photoUrl ? { photoUrl: byline.photoUrl } : {}),
-    ...(claimProjection?.claimed
+    ...(byline.claimedProfile && claimProjection?.claimed
       ? { profile: { id: claimProjection.profileId, claimed: true as const } }
       : {}),
   };

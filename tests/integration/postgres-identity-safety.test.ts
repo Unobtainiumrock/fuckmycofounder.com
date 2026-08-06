@@ -36,7 +36,7 @@ import {
   persistRecoveryReverification,
   persistReportAndCase,
   recordAuditMutationAttempt,
-  recordRestrictedRevealDenial,
+  authorizeRestrictedRevealBoundary,
   recordRestrictedRevealApproval,
   recordRestrictedReveal,
 } from "@/src/platform/persistence/identity-safety-commands";
@@ -1683,17 +1683,33 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         audit: audit("reveal-approved", "policy"),
       }),
     ).resolves.toBe("committed");
+    const moderatorRevealProof = authorizeStaffIdentityProof({
+      actorId: "moderator-b",
+      role: "moderator",
+      identityVerified: true,
+      restrictedAccessApproved: true,
+    });
+    if ("kind" in moderatorRevealProof)
+      throw new Error("moderator reveal proof denied");
+    const revealAuthorization = await authorizeRestrictedRevealBoundary({
+      runner,
+      proof: moderatorRevealProof,
+      context: {
+        ...allowed,
+        account: { ...account, id: "moderator-b" },
+      },
+      decisionId: "moderator-reveal-a",
+      linkageId: "linkage-a",
+      caseId: revealCaseId,
+      now,
+      denialAuditId: "moderator-reveal-a-denied",
+    });
+    if (revealAuthorization.kind !== "authorized")
+      throw new Error("moderator reveal authorization denied");
     await expect(
       recordRestrictedReveal({
         runner,
-        authorization: authorize({
-          action: "restricted-reveal",
-          capability: "restricted.anonymous-author-linkage",
-          targetKind: "anonymous-linkage",
-          targetId: "linkage-a",
-          actorId: "moderator-b",
-          purpose: revealCaseId,
-        }),
+        authorization: revealAuthorization.authorization,
         id: "reveal-a",
         actorId: "moderator-b",
         approvalId: "reveal-approval-a",
@@ -1704,17 +1720,26 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         audit: audit("reveal-recorded", "moderation"),
       }),
     ).resolves.toMatchObject({ kind: "revealed" });
+    const unrelatedRevealAuthorization =
+      await authorizeRestrictedRevealBoundary({
+        runner,
+        proof: moderatorRevealProof,
+        context: {
+          ...allowed,
+          account: { ...account, id: "moderator-b" },
+        },
+        decisionId: "moderator-reveal-b",
+        linkageId: "linkage-b",
+        caseId: revealCaseId,
+        now,
+        denialAuditId: "moderator-reveal-b-denied",
+      });
+    if (unrelatedRevealAuthorization.kind !== "authorized")
+      throw new Error("moderator reveal authorization denied");
     await expect(
       recordRestrictedReveal({
         runner,
-        authorization: authorize({
-          action: "restricted-reveal",
-          capability: "restricted.anonymous-author-linkage",
-          targetKind: "anonymous-linkage",
-          targetId: "linkage-b",
-          actorId: "moderator-b",
-          purpose: revealCaseId,
-        }),
+        authorization: unrelatedRevealAuthorization.authorization,
         id: "reveal-denied",
         actorId: "moderator-b",
         approvalId: "reveal-approval-a",
@@ -1742,35 +1767,23 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       restrictedAccessApproved: true,
     });
     if ("kind" in supportProof) throw new Error("support proof denied");
-    expect(
-      authorizeStaffCommand({
+    await expect(
+      authorizeRestrictedRevealBoundary({
+        runner,
         proof: supportProof,
         context: {
           ...allowed,
           account: { ...account, id: "support-a" },
-          action: "restricted-reveal",
         },
         decisionId: "support-reveal-denied",
-        capability: "restricted.anonymous-author-linkage",
-        targetKind: "anonymous-linkage",
-        targetId: "linkage-a",
-        purpose: revealCaseId,
+        linkageId: "linkage-a",
+        caseId: revealCaseId,
+        now,
+        denialAuditId: "support-reveal-denied-audit",
       }),
-    ).toEqual({ kind: "deny", code: "action-not-available" });
-    await recordRestrictedRevealDenial({
-      runner,
-      authorization: authorize({
-        action: "restricted-reveal-denied",
-        capability: "audit.restricted-reveal-denial",
-        targetKind: "actor",
-        targetId: "support-a",
-        actorId: "authorization-boundary",
-      }),
-      actorId: "authorization-boundary",
-      deniedActorId: "support-a",
-      deniedActorRole: "support",
-      now,
-      audit: audit("support-reveal-denied-audit", "policy"),
+    ).resolves.toEqual({
+      kind: "denied",
+      outcome: { kind: "deny", code: "action-not-available" },
     });
     expect(
       (
@@ -1780,17 +1793,25 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       ).rows[0],
     ).toEqual({
       actor_role: "system",
-      reason_code: "restricted-reveal-role-denied:support",
+      reason_code: "restricted-reveal-authorization-denied",
       resulting_state: "denied",
       restricted_evidence_references: [],
     });
     expect(
       (
         await pool.query(
-          "select count(*)::int count from audit_evidence_payloads where audit_id='support-reveal-denied-audit'",
+          "select restricted_references from audit_evidence_payloads where audit_id='support-reveal-denied-audit'",
         )
       ).rows[0],
-    ).toEqual({ count: 0 });
+    ).toEqual({
+      restricted_references: [
+        "denied-actor-id:support-a",
+        "denied-actor-role:support",
+        "attempted-anonymous-linkage:linkage-a",
+        `moderation-case:${revealCaseId}`,
+        `documented-purpose:${revealCaseId}`,
+      ],
+    });
     await expect(
       loadRestrictedAttributionProjection({
         runner,

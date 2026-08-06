@@ -39,7 +39,7 @@ export type CommandActorRole =
   | "system";
 
 declare const verifiedStaffActorBrand: unique symbol;
-interface VerifiedStaffActor {
+export interface VerifiedStaffActor {
   readonly [verifiedStaffActorBrand]: true;
   readonly actorId: string;
   readonly role: Exclude<CommandActorRole, "account">;
@@ -166,7 +166,7 @@ export function authorizeStaffIdentityProof(input: {
   return proof;
 }
 
-export function authorizeStaffCommand(input: {
+interface StaffCommandAuthorizationInput {
   readonly proof: VerifiedStaffActor;
   readonly context: PolicyContext;
   readonly decisionId: string;
@@ -174,9 +174,24 @@ export function authorizeStaffCommand(input: {
   readonly targetKind: string;
   readonly targetId: string;
   readonly purpose?: string;
-}):
+}
+
+type StaffCommandAuthorizationResult =
   | AuthorizedDurableCommand
-  | Exclude<PolicyOutcome, { readonly kind: "allow" }> {
+  | Exclude<PolicyOutcome, { readonly kind: "allow" }>;
+
+export function authorizeStaffCommand(
+  input: StaffCommandAuthorizationInput,
+): StaffCommandAuthorizationResult {
+  if (input.context.action === "restricted-reveal") {
+    return { kind: "deny", code: "action-not-available" };
+  }
+  return authorizeStaffCommandInternal(input);
+}
+
+function authorizeStaffCommandInternal(
+  input: StaffCommandAuthorizationInput,
+): StaffCommandAuthorizationResult {
   const decision = evaluatePolicy(input.context);
   if (
     decision.kind !== "allow" ||
@@ -219,6 +234,65 @@ export function authorizeStaffCommand(input: {
     policyVersion: decision.policyVersion,
     ...(input.purpose ? { purpose: input.purpose } : {}),
   });
+}
+
+type RestrictedRevealAuthorizationAttempt =
+  | {
+      readonly kind: "authorized";
+      readonly authorization: AuthorizedDurableCommand;
+    }
+  | {
+      readonly kind: "denied";
+      readonly outcome: Exclude<PolicyOutcome, { readonly kind: "allow" }>;
+      readonly denialAuthorization: AuthorizedDurableCommand;
+      readonly deniedActorId: string;
+      readonly deniedActorRole: Exclude<CommandActorRole, "account">;
+      readonly linkageId: string;
+      readonly caseId: string;
+    };
+
+export function attemptRestrictedRevealAuthorization(input: {
+  readonly proof: VerifiedStaffActor;
+  readonly context: Omit<PolicyContext, "action">;
+  readonly decisionId: string;
+  readonly linkageId: string;
+  readonly caseId: string;
+}): RestrictedRevealAuthorizationAttempt {
+  if (!issuedStaffActors.has(input.proof))
+    throw new Error(
+      "Restricted reveal requires canonical verified staff proof",
+    );
+  const result = authorizeStaffCommandInternal({
+    proof: input.proof,
+    context: { ...input.context, action: "restricted-reveal" },
+    decisionId: input.decisionId,
+    capability: "restricted.anonymous-author-linkage",
+    targetKind: "anonymous-linkage",
+    targetId: input.linkageId,
+    purpose: input.caseId,
+  });
+  if (result.kind === "authorized-durable-command") {
+    return { kind: "authorized", authorization: result };
+  }
+  return {
+    kind: "denied",
+    outcome: result,
+    denialAuthorization: issueDurableCommand({
+      kind: "authorized-durable-command",
+      decisionId: `${input.decisionId}:denial-audit`,
+      actorId: "restricted-reveal-authorization-boundary",
+      actorRole: "system",
+      action: "restricted-reveal-denied",
+      capability: "audit.restricted-reveal-denial",
+      targetKind: "actor",
+      targetId: input.proof.actorId,
+      policyVersion: "identity-safety-v1",
+    }),
+    deniedActorId: input.proof.actorId,
+    deniedActorRole: input.proof.role,
+    linkageId: input.linkageId,
+    caseId: input.caseId,
+  };
 }
 
 export function authorizeAuthenticationProof(input: {
@@ -309,7 +383,6 @@ function staffCommandAllowed(
     system: new Set([
       "finalize-deletion:account.lifecycle",
       "abuse-risk-review:trust-safety.risk-review",
-      "restricted-reveal-denied:audit.restricted-reveal-denial",
       "activate:account.lifecycle",
       "limit:account.lifecycle",
       "suspend:account.lifecycle",

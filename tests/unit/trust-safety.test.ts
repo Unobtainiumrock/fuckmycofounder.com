@@ -215,7 +215,7 @@ describe("centralized policy", () => {
     },
   );
 
-  it("requires both role grant and approved purpose for restricted reveal", () => {
+  it("routes every restricted reveal attempt through the coupled boundary", () => {
     const unapproved = authorizeStaffIdentityProof({
       actorId: "moderator-a",
       role: "moderator",
@@ -245,7 +245,7 @@ describe("centralized policy", () => {
       });
     expect(command(unapproved, "case-a").kind).toBe("deny");
     expect(command(approved).kind).toBe("deny");
-    expect(command(approved, "case-a").kind).toBe("authorized-durable-command");
+    expect(command(approved, "case-a").kind).toBe("deny");
   });
 });
 

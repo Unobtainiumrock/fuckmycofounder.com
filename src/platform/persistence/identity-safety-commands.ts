@@ -580,7 +580,7 @@ export {
 } from "./identity-safety-account-commands";
 export { loadAuthorizedAccountData } from "./identity-safety-account-export";
 export { persistRecoveryReverification } from "./identity-safety-reverification-commands";
-export { recordRestrictedRevealDenial } from "./identity-safety-reveal-denial";
+export { authorizeRestrictedRevealBoundary } from "./identity-safety-reveal-authorization";
 export {
   persistAccountBlock,
   persistBylineClaimLink,

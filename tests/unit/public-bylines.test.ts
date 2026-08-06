@@ -127,7 +127,7 @@ describe("Public Bylines and attribution", () => {
           claimReverificationRequired: false,
         },
       ),
-    ).toMatchObject({ profile: { id: claim.profileId, claimed: true } });
+    ).toEqual({ kind: "named", displayName: "Ada Founder" });
     expect(
       publicBylineProjection(
         { ...linkVerifiedClaim(byline, claim, true), claimedProfile: true },
