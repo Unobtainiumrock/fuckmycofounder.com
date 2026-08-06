@@ -91,7 +91,7 @@ function drawSections(
   if (avatar) drawAvatar(context, avatar);
   let y = 305;
   for (const [heading, text, size, lineHeight, maximumLines] of sections) {
-    const sectionWidth = avatar && y < 446 ? maximumWidth - 248 : maximumWidth;
+    const sectionWidth = avatar && y < 446 ? maximumWidth - 272 : maximumWidth;
     drawLabel(context, heading, left, y);
     y += 48;
     context.fillStyle = colors.paper;
@@ -138,24 +138,32 @@ function drawAvatar(
   const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
   const sourceX = (image.naturalWidth - sourceSize) / 2;
   const sourceY = (image.naturalHeight - sourceSize) / 2;
+  const frameWidth = size + 24;
+  const frameHeight = size + 62;
+  context.save();
+  context.translate(x + frameWidth / 2, y + frameHeight / 2);
+  context.rotate(0.028);
+  context.translate(-frameWidth / 2, -frameHeight / 2);
+  context.fillStyle = "rgba(0,0,0,.45)";
+  context.fillRect(10, 10, frameWidth, frameHeight);
   context.fillStyle = colors.paper;
-  context.fillRect(x, y, size + 24, size + 62);
+  context.fillRect(0, 0, frameWidth, frameHeight);
   context.drawImage(
     image,
     sourceX,
     sourceY,
     sourceSize,
     sourceSize,
-    x + 12,
-    y + 12,
+    12,
+    12,
     size,
     size,
   );
   context.fillStyle = colors.ink;
   context.font = "900 22px monospace";
   context.textAlign = "center";
-  context.fillText("SUBJECT", x + (size + 24) / 2, y + size + 45);
-  context.textAlign = "left";
+  context.fillText("SUBJECT", frameWidth / 2, size + 45);
+  context.restore();
 }
 
 function drawWrapped(
