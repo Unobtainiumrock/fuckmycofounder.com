@@ -46,6 +46,28 @@ concurrency, require an audit record in the same one-client transaction, and
 prove rollback when that audit write fails. No product table or production
 migration was introduced.
 
+## Acquisition parity reconciliation
+
+The 2026-08-05 static-production reconciliation compared the current static
+`/` build and the production-built Next route at a 1440×900 desktop viewport.
+Both rendered the same 1440×3078 full-page landing after the Next route
+incorporated the current content, Town Board entry, optional browser-local
+subject image, live case-file preview, validation, deterministic report,
+responsive dialog, fragment restoration, and client-side share/download
+controls. The prior macOS Playwright baseline was 1440×2633 while the
+then-current Next result was 1440×2659; it was obsolete rather than a
+threshold issue. The replacement body-locator baseline is 1440×3081 (the
+three-pixel body raster difference from the full-page measurement is expected)
+and was regenerated only after the static/Next visual comparison. It is
+rechecked by the production-build Playwright journey.
+
+The provider boundary is intentional: the Next route retains the `/board`
+entry and fragment-only local reports, while the static Cloudflare case
+creation, persisted-case loading, publishing, feed, and thread paths remain
+unchanged and outside Order 0. The Next board-key form therefore names that
+retrieval remains on the static production surface rather than attempting a
+partial provider migration.
+
 ## Explicitly deferred evidence
 
 The foundation work selected or mutated no production database, authentication,

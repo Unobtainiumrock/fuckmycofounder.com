@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add root `AGENTS.md`, `docs/code-standards.md`, `docs/architecture/tech-stack-and-scaffold.md`, and `openspec/README.md` with the approved authority order, implementation workflow, module vocabulary, hard/default/heuristic rules, and evidence boundaries (test: instructions cross-reference only current authoritative paths).
 - [x] 1.2 Pin a supported LTS Node.js runtime, pnpm, strict TypeScript, and the current patched Next.js Active LTS release in one package and frozen lockfile (test: clean install and version assertions).
-- [ ] 1.3 Server-render the existing landing/Cooked Quiz route from the production application while preserving its URL, Caseboard design, accessibility, deterministic report behavior, and supported share-fragment contract (test: current regression suite plus production-build browser parity).
+- [x] 1.3 Server-render the existing landing/Cooked Quiz route from the production application while preserving its URL, Caseboard design, accessibility, deterministic report behavior, and supported share-fragment contract (test: current regression suite plus production-build browser parity).
 - [x] 1.4 Produce one standalone Node container with distinct liveness/readiness, graceful shutdown, immutable build identity, and no production secrets (test: container start, health, dependency-failure, and signal fixtures).
 
 ## 2. Module and privacy scaffold

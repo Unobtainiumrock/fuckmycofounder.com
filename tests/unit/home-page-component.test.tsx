@@ -11,5 +11,9 @@ describe("home page component", () => {
     expect(html).toContain('aria-labelledby="hero-title"');
     expect(html).toContain('aria-labelledby="dialog-title"');
     expect(html).toContain('aria-label="Close report"');
+    expect(html).toContain('aria-labelledby="board-entry-title"');
+    expect(html).toContain('href="/board"');
+    expect(html).toContain('data-avatar-input="true"');
+    expect(html).toContain('aria-label="Live case file preview"');
   });
 });

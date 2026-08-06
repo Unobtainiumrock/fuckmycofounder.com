@@ -53,6 +53,14 @@ No distributed queue is selected. Future delivery, expiry, retention, and media 
 
 The current static landing and Cooked Quiz are user-visible behavior, not disposable scaffold. The first server-rendered route reproduces them before static files are removed. URL, fragment compatibility, accessibility, visuals, CSP, share behavior, and the four current deterministic tests become regression inputs. Network CSP changes are route-specific and allowlisted; the public acquisition page does not gain broad third-party access merely because authenticated routes need it.
 
+The static landing's optional local subject image, live case-file preview, and
+Town Board entry are acquisition parity. Its Cloudflare Functions/KV/R2/D1
+case creation, persisted-case retrieval, publishing, feed, and comment-thread
+operations are not: Order 0 keeps those providers and their production
+workflow intact, links to `/board`, and preserves fragment-only local reports
+in the Next route. Moving provider-backed cases or threads requires an owning
+feature change and separately authorized provider acceptance.
+
 ## Verification architecture
 
 The root command interface is stable even if tools change:

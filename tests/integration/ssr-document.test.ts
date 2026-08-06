@@ -19,6 +19,9 @@ describe.runIf(baseUrl)("production acquisition document", () => {
     );
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(html).toContain("Some startups need a pivot.");
+    expect(html).toContain(
+      "Turn cofounder chaos into a redacted, shareable incident report. No accounts. Optional mugshot. No names.",
+    );
     expect(html).toContain("Begin emotional paperwork");
     expect(html).toContain("Cofounder Incident Report");
     expect(html).toContain(

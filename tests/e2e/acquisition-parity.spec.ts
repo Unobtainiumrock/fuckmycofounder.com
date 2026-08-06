@@ -11,6 +11,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
       name: "Some startups need a pivot. Some need an exorcism.",
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Visit the Town Board" }),
+  ).toHaveAttribute("href", "/board");
   if (process.platform === "darwin") {
     await expect(page.locator("body")).toHaveScreenshot(
       "acquisition-home.png",
@@ -21,6 +24,9 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   await page.getByRole("button", { name: "Begin emotional paperwork" }).click();
   await page.getByLabel("Weaponized ‘Quick Sync’").check();
   await page.getByRole("button", { name: "Continue" }).click();
+  await page
+    .locator("[data-avatar-input]")
+    .setInputFiles("public/assets/images/share-card.png");
   await page.getByLabel("My cofounder…").fill("called a six a.m. meeting");
   await page
     .getByLabel("When asked about it, they said…")
@@ -28,6 +34,12 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   await page
     .getByLabel("Sane adults might call this…")
     .fill("calendar warfare");
+  await expect(
+    page.getByRole("article", { name: "Live case file preview" }),
+  ).toContainText("calendar warfare");
+  await expect(
+    page.locator("[data-case-preview] [data-report-subject]"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Generate case file ↗" }).click();
 
   const caseFile = page.getByRole("article", {
@@ -35,6 +47,7 @@ test("landing and Cooked Quiz preserve the approved Caseboard experience", async
   });
   await expect(caseFile).toContainText("Weaponized ‘Quick Sync’");
   await expect(caseFile).toContainText("calendar warfare");
+  await expect(caseFile.locator("[data-report-subject]")).toBeVisible();
   if (process.platform === "darwin") {
     await expect(caseFile).toHaveScreenshot("acquisition-case-file.png", {
       animations: "disabled",

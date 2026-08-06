@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(canonicalUrl),
   title: "Fuck My Cofounder — File an Incident Report",
   description:
-    "Turn cofounder chaos into a shareable incident report. No account. No filter.",
+    "Turn cofounder chaos into a redacted, shareable incident report. No accounts. Optional mugshot. No names.",
   alternates: { canonical: canonicalUrl },
   openGraph: {
     type: "website",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Fuck My Cofounder",
-    description: "File a cofounder incident report.",
+    description: "File a completely unofficial cofounder incident report.",
     images: ["/assets/images/share-card.png"],
   },
   icons: { icon: "/assets/icons/favicon.svg" },

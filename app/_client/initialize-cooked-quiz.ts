@@ -11,6 +11,7 @@ import {
   shareReport,
 } from "./share-report";
 
+// source-size: reason=one dialog lifecycle keeps DOM contracts and cleanup local
 const quiz = createCookedQuiz({ clock: { now: () => new Date() } });
 
 export function initializeCookedQuiz(): () => void {
@@ -25,8 +26,30 @@ export function initializeCookedQuiz(): () => void {
     dialog,
     "[data-charge-grid]",
   );
+  const previewWrap = requireElement<HTMLElement>(
+    dialog,
+    "[data-case-preview-wrap]",
+  );
+  const preview = requireElement<HTMLElement>(dialog, "[data-case-preview]");
+  const avatarInput = requireElement<HTMLInputElement>(
+    dialog,
+    "[data-avatar-input]",
+  );
+  const avatarPreview = requireElement<HTMLImageElement>(
+    dialog,
+    "[data-avatar-preview]",
+  );
+  const avatarClear = requireElement<HTMLButtonElement>(
+    dialog,
+    "[data-avatar-clear]",
+  );
+  const avatarError = requireElement<HTMLElement>(
+    dialog,
+    "[data-avatar-error]",
+  );
   const toast = requireElement<HTMLElement>(dialog, "[data-toast]");
   let currentReport: CookedQuizReport | undefined;
+  let avatarUrl: string | undefined;
 
   buildCharges(chargeGrid);
   requireElement<HTMLElement>(document, "[data-year]").textContent = String(
@@ -64,22 +87,41 @@ export function initializeCookedQuiz(): () => void {
     )) {
       element.textContent = "";
     }
+    avatarError.textContent = "";
   };
 
   const displayReport = (report: CookedQuizReport): void => {
     currentReport = report;
-    renderReport(report, dialog);
+    renderReport(report, requireElement(dialog, "[data-case-file]"), avatarUrl);
     showStep(3);
     openDialog();
+  };
+
+  const clearAvatar = (): void => {
+    if (avatarUrl) URL.revokeObjectURL(avatarUrl);
+    avatarUrl = undefined;
+    avatarInput.value = "";
+    avatarPreview.hidden = true;
+    avatarPreview.removeAttribute("src");
+    avatarClear.hidden = true;
+  };
+
+  const updateLivePreview = (): void => {
+    const result = quiz.submit(collectSubmission(form));
+    previewWrap.hidden = result.status !== "accepted";
+    if (result.status === "accepted")
+      renderReport(result.report, preview, avatarUrl);
   };
 
   const resetReport = (): void => {
     form.reset();
     currentReport = undefined;
+    clearAvatar();
     clearErrors();
     for (const counter of form.querySelectorAll<HTMLElement>("[data-count]")) {
       counter.textContent = "0";
     }
+    previewWrap.hidden = true;
     history.replaceState(null, "", `${location.pathname}${location.search}`);
     showStep(1);
   };
@@ -135,6 +177,56 @@ export function initializeCookedQuiz(): () => void {
     { signal },
   );
 
+  avatarInput.addEventListener(
+    "change",
+    () => {
+      const [file] = avatarInput.files ?? [];
+      if (!file) return;
+      if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type)) {
+        clearAvatar();
+        avatarError.textContent = "Choose a JPEG, PNG, or WebP mugshot.";
+        return;
+      }
+      if (avatarUrl) URL.revokeObjectURL(avatarUrl);
+      avatarUrl = URL.createObjectURL(file);
+      avatarPreview.src = avatarUrl;
+      avatarPreview.hidden = false;
+      avatarClear.hidden = false;
+      avatarError.textContent = "";
+      updateLivePreview();
+    },
+    { signal },
+  );
+  avatarClear.addEventListener(
+    "click",
+    () => {
+      clearAvatar();
+      updateLivePreview();
+    },
+    { signal },
+  );
+
+  const reclaimForm = document.querySelector<HTMLFormElement>(
+    "[data-board-entry-reclaim]",
+  );
+  reclaimForm?.addEventListener(
+    "submit",
+    (event) => {
+      event.preventDefault();
+      const boardKey = document.querySelector<HTMLInputElement>(
+        "[data-board-entry-input]",
+      )?.value;
+      const error = document.querySelector<HTMLElement>(
+        "[data-board-entry-error]",
+      );
+      if (!error) return;
+      error.textContent = /^FMC-[A-Z0-9]{7}$/iu.test(boardKey ?? "")
+        ? "Town Board retrieval remains on the static production surface."
+        : "Enter a case id like FMC-ABC2345.";
+    },
+    { signal },
+  );
+
   form.addEventListener(
     "input",
     (event) => {
@@ -149,6 +241,7 @@ export function initializeCookedQuiz(): () => void {
         `[data-count="${event.target.name}"]`,
       );
       if (counter) counter.textContent = String(event.target.value.length);
+      updateLivePreview();
     },
     { signal },
   );
@@ -258,7 +351,11 @@ function readTextField(data: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function renderReport(report: CookedQuizReport, root: ParentNode): void {
+function renderReport(
+  report: CookedQuizReport,
+  root: ParentNode,
+  avatarUrl: string | undefined,
+): void {
   const fields: Record<string, string> = {
     "[data-report-id]": `CASE #${report.id}`,
     "[data-report-severity]": `SEVERITY: ${report.severity}`,
@@ -270,6 +367,16 @@ function renderReport(report: CookedQuizReport, root: ParentNode): void {
   };
   for (const [selector, text] of Object.entries(fields)) {
     requireElement<HTMLElement>(root, selector).textContent = text;
+  }
+  const subject = requireElement<HTMLElement>(root, "[data-report-subject]");
+  const avatar = requireElement<HTMLImageElement>(root, "[data-report-avatar]");
+  subject.hidden = !avatarUrl;
+  if (avatarUrl) {
+    avatar.src = avatarUrl;
+    avatar.alt = "Subject mugshot";
+  } else {
+    avatar.removeAttribute("src");
+    avatar.alt = "";
   }
 }
 
