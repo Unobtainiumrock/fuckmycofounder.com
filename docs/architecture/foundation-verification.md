@@ -104,11 +104,11 @@ Node 24.18.0 container image. It passed formatting, lint, architecture (17
 contracts), unused exports, typecheck, Next build, 22 legacy plus 79 Vitest
 tests, four Postgres tests, both four-assertion production HTTP configurations,
 five Playwright journeys, file-size policy, strict OpenSpec (11/0), container
-smoke, and legacy `build`/`test`. A fresh standards review then found that the
-download assertion proved only PNG dimensions, not the selected mugshot pixels;
-the final task evidence was reopened for that correction and a review of the
-resulting head. No provider, deployment, secret, DNS, or live data mutation
-occurred during this corrective pass.
+smoke, and legacy `build`/`test`. The download assertion now checks selected
+fixture-red pixels in the decoded avatar region. Independent standards and Spec
+reviews of `bb04411..480fe10` found no high- or medium-severity findings; tasks
+1.3, 7.1, and 7.2 are closed on that evidence. No provider, deployment, secret,
+DNS, or live data mutation occurred during this corrective pass.
 
 ## Explicitly deferred evidence
 

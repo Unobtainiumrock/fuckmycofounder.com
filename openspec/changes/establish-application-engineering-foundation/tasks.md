@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add root `AGENTS.md`, `docs/code-standards.md`, `docs/architecture/tech-stack-and-scaffold.md`, and `openspec/README.md` with the approved authority order, implementation workflow, module vocabulary, hard/default/heuristic rules, and evidence boundaries (test: instructions cross-reference only current authoritative paths).
 - [x] 1.2 Pin a supported LTS Node.js runtime, pnpm, strict TypeScript, and the current patched Next.js Active LTS release in one package and frozen lockfile (test: clean install and version assertions).
-- [ ] 1.3 Server-render the existing landing/Cooked Quiz route from the production application while preserving its URL, Caseboard design, accessibility, deterministic report behavior, and supported share-fragment contract (test: current regression suite plus production-build browser parity).
+- [x] 1.3 Server-render the existing landing/Cooked Quiz route from the production application while preserving its URL, Caseboard design, accessibility, deterministic report behavior, and supported share-fragment contract (test: current regression suite plus production-build browser parity).
 - [x] 1.4 Produce one standalone Node container with distinct liveness/readiness, graceful shutdown, immutable build identity, and no production secrets (test: container start, health, dependency-failure, and signal fixtures).
 
 ## 2. Module and privacy scaffold
@@ -41,6 +41,6 @@
 
 ## 7. Close-out
 
-- [ ] 7.1 Run the complete canonical gate from a clean checkout and document exact runtime, framework, package, database-tooling, and container versions plus any intentionally deferred provider choices.
-- [ ] 7.2 Complete independent standards and spec review, threat-model the private/public projection and test-database guards, and correct every high-severity finding before marking the foundation implemented.
+- [x] 7.1 Run the complete canonical gate from a clean checkout and document exact runtime, framework, package, database-tooling, and container versions plus any intentionally deferred provider choices.
+- [x] 7.2 Complete independent standards and spec review, threat-model the private/public projection and test-database guards, and correct every high-severity finding before marking the foundation implemented.
 - [x] 7.3 Confirm the product implementation order records the now-implemented engineering foundation as the prerequisite for every network feature, while keeping deployment and live-provider setup as separately authorized work.
