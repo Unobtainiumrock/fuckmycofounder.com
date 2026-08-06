@@ -16,6 +16,7 @@ import {
   addDays,
   requireAuthorization,
   requiredString,
+  revokeAccountSessions,
   restrictedSnapshot,
   writeAudit,
   writeNotice,
@@ -297,17 +298,6 @@ async function applyEnforcementEffects(
   await revokeAccountSessions(tx, target.accountId, input.action.effectiveAt);
 }
 
-async function revokeAccountSessions(
-  tx: TransactionContext,
-  accountId: string,
-  now: Date,
-): Promise<void> {
-  await tx.query(
-    "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
-    [accountId, now],
-  );
-}
-
 export async function recordRestrictedRevealApproval(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
@@ -332,6 +322,7 @@ export async function recordRestrictedRevealApproval(input: {
     const result = await tx.query<Record<string, unknown>>(
       `select c.state,l.id linkage_id from moderation_cases c
        join anonymous_linkages l on l.id=$2
+         and l.account_id=c.affected_account_id and c.target_id=l.id
        where c.id=$1 for update of c,l`,
       [input.caseId, input.linkageId],
     );
@@ -400,8 +391,9 @@ export async function recordRestrictedReveal(input: {
   const outcome = await input.runner.run(input.audit.id, async (tx) => {
     const approval = await tx.query<Record<string, unknown>>(
       `select a.approver_id,c.state from restricted_reveal_approvals a
-       join moderation_cases c on c.id=a.case_id
        join anonymous_linkages l on l.id=a.linkage_id
+       join moderation_cases c on c.id=a.case_id
+         and c.affected_account_id=l.account_id and c.target_id=l.id
        where a.id=$1 and a.request_actor_id=$2 and a.case_id=$3
          and a.case_reason=$3 and a.linkage_id=$4 and a.used_at is null
        for update of a,c,l`,
@@ -534,7 +526,14 @@ export async function loadRestrictedAttributionProjection(input: {
        from restricted_reveals r
        join identity_safety_audit a on a.id=r.audit_id
        join anonymous_linkages l on l.id=r.linkage_id
-       where r.id=$1 and r.linkage_id=$2 and r.actor_id=$3 and r.case_reason=$4 and r.allowed=true and r.field_class='anonymous-author-linkage'`,
+       join restricted_reveal_approvals ap on ap.id=r.approval_id
+         and ap.linkage_id=r.linkage_id and ap.request_actor_id=r.actor_id
+         and ap.case_reason=r.case_reason and ap.used_at is not null
+       join moderation_cases c on c.id=ap.case_id and c.id=r.case_reason
+         and c.target_id=l.id and c.affected_account_id=l.account_id
+       where r.id=$1 and r.linkage_id=$2 and r.actor_id=$3 and r.case_reason=$4
+         and r.allowed=true and r.field_class='anonymous-author-linkage'
+         and c.state in ('received','triaged','investigating')`,
       [input.revealId, input.linkageId, input.actorId, input.caseReason],
     );
     const row = result.rows[0];
@@ -581,6 +580,7 @@ export {
 } from "./identity-safety-account-commands";
 export { loadAuthorizedAccountData } from "./identity-safety-account-export";
 export { persistRecoveryReverification } from "./identity-safety-reverification-commands";
+export { recordRestrictedRevealDenial } from "./identity-safety-reveal-denial";
 export {
   persistAccountBlock,
   persistBylineClaimLink,

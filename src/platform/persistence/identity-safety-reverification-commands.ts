@@ -94,7 +94,19 @@ export async function persistRecoveryReverification(input: {
       occurredAt: input.now,
       priorState: "reverification-required",
       resultingState: "verified",
+      restrictedEvidenceReferences: [
+        reverificationEvidenceReference(input.operation, targetId),
+      ],
     });
     return "committed" as const;
   });
+}
+
+function reverificationEvidenceReference(
+  operation: "contact" | "claim",
+  targetId: string,
+): string {
+  return operation === "claim"
+    ? `claim-evidence:${targetId}`
+    : `account-recovery:${targetId}`;
 }

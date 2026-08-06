@@ -6,6 +6,7 @@ import type {
   ProfileClaim,
 } from "../../modules/identity-safety/server";
 import {
+  addDays,
   hasRecentReauthentication,
   requireAuthorization,
   writeAudit,
@@ -71,6 +72,7 @@ export async function persistProfileClaim(input: {
           ? existing.rows[0].state
           : null,
       resultingState: input.claim.state,
+      restrictedEvidenceReferences: [`claim-evidence:${input.claim.id}`],
     });
     return "committed" as const;
   });
@@ -157,10 +159,10 @@ async function persistClaimDecision(
     [
       input.claim.id,
       input.claim.state,
-      input.claim.decidedAt,
-      input.claim.evidenceExpiresAt,
+      input.now,
+      addDays(input.now, 90),
       input.reviewerId,
-      input.claim.appealDeadline,
+      addDays(input.now, 30),
     ],
   );
   return true;

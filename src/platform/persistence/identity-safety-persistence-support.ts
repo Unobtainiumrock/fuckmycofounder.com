@@ -96,6 +96,7 @@ const exactAuditCategories = new Map<string, AuditEvent["category"]>([
   ["abuse-risk-review", "moderation"],
   ["restricted-reveal", "policy"],
   ["restricted-reveal-approve", "policy"],
+  ["restricted-reveal-denied", "policy"],
   ["restricted-reveal-project", "policy"],
   ["audit-mutation-attempt", "policy"],
   ["account-authenticate", "identity"],
@@ -148,6 +149,17 @@ export async function hasRecentReauthentication(
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) return false;
   const age = input.now.getTime() - value.getTime();
   return age >= 0 && age <= 15 * 60_000;
+}
+
+export async function revokeAccountSessions(
+  tx: TransactionContext,
+  accountId: string,
+  now: Date,
+): Promise<void> {
+  await tx.query(
+    "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
+    [accountId, now],
+  );
 }
 
 export function requiredDate(value: unknown, field: string): Date {

@@ -265,6 +265,7 @@ export async function persistRecoveryDecision(input: {
       occurredAt: input.now,
       priorState,
       resultingState: input.state,
+      restrictedEvidenceReferences: [`recovery-review:${input.recoveryId}`],
     });
     return "committed" as const;
   });

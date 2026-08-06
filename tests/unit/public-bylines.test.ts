@@ -96,7 +96,11 @@ describe("Public Bylines and attribution", () => {
 
   it("links only an explicitly enabled verified claim and removes stale claim markers", () => {
     expect(
-      publicBylineProjection(linkVerifiedClaim(byline, claim, true), account),
+      publicBylineProjection(linkVerifiedClaim(byline, claim, true), account, {
+        claim,
+        recoveryReverificationRequired: false,
+        claimReverificationRequired: false,
+      }),
     ).toEqual({
       kind: "named",
       displayName: "Ada Founder",
@@ -106,6 +110,33 @@ describe("Public Bylines and attribution", () => {
       publicBylineProjection(
         linkVerifiedClaim(byline, { ...claim, state: "revoked" }, true),
         account,
+        {
+          claim: { ...claim, state: "revoked" },
+          recoveryReverificationRequired: false,
+          claimReverificationRequired: false,
+        },
+      ),
+    ).toEqual({ kind: "named", displayName: "Ada Founder" });
+    expect(
+      publicBylineProjection(
+        { ...linkVerifiedClaim(byline, claim, true), claimedProfile: false },
+        account,
+        {
+          claim,
+          recoveryReverificationRequired: false,
+          claimReverificationRequired: false,
+        },
+      ),
+    ).toMatchObject({ profile: { id: claim.profileId, claimed: true } });
+    expect(
+      publicBylineProjection(
+        { ...linkVerifiedClaim(byline, claim, true), claimedProfile: true },
+        account,
+        {
+          claim,
+          recoveryReverificationRequired: false,
+          claimReverificationRequired: true,
+        },
       ),
     ).toEqual({ kind: "named", displayName: "Ada Founder" });
   });

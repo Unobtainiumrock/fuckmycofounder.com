@@ -94,20 +94,56 @@ describe("Profile Claim foundation", () => {
     const verified = transitionProfileClaim(pending, "verified", now)!;
     if (verified.state !== "verified") throw new Error("claim not verified");
     const projection = publicClaimProjection("profile-public", verified, {
+      id: account.id,
       state: "active",
+      verifiedContact: true,
       recoveryReverificationRequired: false,
+      claimReverificationRequired: false,
     });
     expect(projection).toEqual({ profileId: "profile-public", claimed: true });
     expect(
       publicClaimProjection("profile-public", verified, {
+        id: account.id,
         state: "active",
+        verifiedContact: true,
         recoveryReverificationRequired: true,
+        claimReverificationRequired: false,
       }),
     ).toEqual({ profileId: "profile-public", claimed: false });
     expect(
       publicClaimProjection("profile-public", verified, {
+        id: account.id,
         state: "deleted",
+        verifiedContact: true,
         recoveryReverificationRequired: false,
+        claimReverificationRequired: false,
+      }),
+    ).toEqual({ profileId: "profile-public", claimed: false });
+    expect(
+      publicClaimProjection("profile-public", verified, {
+        id: account.id,
+        state: "active",
+        verifiedContact: true,
+        recoveryReverificationRequired: false,
+        claimReverificationRequired: true,
+      }),
+    ).toEqual({ profileId: "profile-public", claimed: false });
+    expect(
+      publicClaimProjection("different-profile", verified, {
+        id: account.id,
+        state: "active",
+        verifiedContact: true,
+        recoveryReverificationRequired: false,
+        claimReverificationRequired: false,
+      }),
+    ).toEqual({ profileId: "different-profile", claimed: false });
+    expect(
+      publicClaimProjection("profile-public", verified, {
+        id: "different-account",
+        state: "active",
+        verifiedContact: true,
+        recoveryReverificationRequired: false,
+        claimReverificationRequired: false,
       }),
     ).toEqual({ profileId: "profile-public", claimed: false });
     expect(

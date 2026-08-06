@@ -75,6 +75,11 @@ describe("identity and safety walking skeleton", () => {
         updatedAt: now,
       },
       account,
+      {
+        claim: null,
+        recoveryReverificationRequired: false,
+        claimReverificationRequired: false,
+      },
     );
     const anonymous = anonymousAttribution();
     const policy = {

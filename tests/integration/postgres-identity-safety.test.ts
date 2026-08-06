@@ -36,6 +36,7 @@ import {
   persistRecoveryReverification,
   persistReportAndCase,
   recordAuditMutationAttempt,
+  recordRestrictedRevealDenial,
   recordRestrictedRevealApproval,
   recordRestrictedReveal,
 } from "@/src/platform/persistence/identity-safety-commands";
@@ -136,6 +137,7 @@ const privilegedActions: Readonly<
   "moderation-appeal-decision": "moderator",
   "restricted-reveal": "moderator",
   "restricted-reveal-approve": "moderator",
+  "restricted-reveal-denied": "system",
   "restricted-reveal-project": "moderator",
   "audit-mutation-attempt": "moderator",
   "profile-claim-decide": "identity-reviewer",
@@ -1049,9 +1051,9 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       profileId: "profile-a",
       state: "verified" as const,
       evidenceKind: "human-review" as const,
-      decidedAt: now,
-      appealDeadline: new Date(now.getTime() + 30 * 86_400_000),
-      evidenceExpiresAt: now,
+      decidedAt: new Date(now.getTime() + 7 * 86_400_000),
+      appealDeadline: new Date(now.getTime() + 1 * 86_400_000),
+      evidenceExpiresAt: new Date(now.getTime() + 1_000 * 86_400_000),
     };
     await expect(
       persistProfileClaim({
@@ -1120,6 +1122,34 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         audit: audit("claim-verified", "claim"),
       }),
     ).resolves.toBe("committed");
+    expect(
+      (
+        await pool.query(
+          "select decided_at,appeal_deadline,evidence_expires_at from profile_claims where id=$1",
+          [claim.id],
+        )
+      ).rows[0],
+    ).toEqual({
+      decided_at: now,
+      appeal_deadline: new Date(now.getTime() + 30 * 86_400_000),
+      evidence_expires_at: new Date(now.getTime() + 90 * 86_400_000),
+    });
+    expect(
+      (
+        await pool.query(
+          "select audit_id,restricted_references from audit_evidence_payloads where audit_id in ('claim-submitted','claim-verified') order by audit_id",
+        )
+      ).rows,
+    ).toEqual([
+      {
+        audit_id: "claim-submitted",
+        restricted_references: [`claim-evidence:${claim.id}`],
+      },
+      {
+        audit_id: "claim-verified",
+        restricted_references: [`claim-evidence:${claim.id}`],
+      },
+    ]);
     await pool.query("update accounts set state='suspended' where id=$1", [
       account.id,
     ]);
@@ -1609,9 +1639,30 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await pool.query(
       `insert into moderation_cases
        (id,target_id,state,queue,target_snapshot,affected_account_id,created_at)
-       values ($1,'anonymous-linkage-review','received','ordinary','{}'::jsonb,$2,$3)`,
+       values ($1,'linkage-a','received','ordinary','{}'::jsonb,$2,$3)`,
       [revealCaseId, account.id, now],
     );
+    await expect(
+      recordRestrictedRevealApproval({
+        runner,
+        authorization: authorize({
+          action: "restricted-reveal-approve",
+          capability: "restricted.anonymous-author-linkage",
+          targetKind: "anonymous-linkage",
+          targetId: "linkage-b",
+          actorId: "lead-a",
+          purpose: revealCaseId,
+          decisionId: "unrelated-linkage-approval",
+        }),
+        id: "unrelated-linkage-approval",
+        requestActorId: "moderator-b",
+        approverId: "lead-a",
+        caseId: revealCaseId,
+        linkageId: "linkage-b",
+        now,
+        audit: audit("unrelated-linkage-approval-audit", "policy"),
+      }),
+    ).resolves.toBe("ineligible");
     await expect(
       recordRestrictedRevealApproval({
         runner,
@@ -1684,6 +1735,62 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       resulting_state: "denied",
       restricted_evidence_references: [],
     });
+    const supportProof = authorizeStaffIdentityProof({
+      actorId: "support-a",
+      role: "support",
+      identityVerified: true,
+      restrictedAccessApproved: true,
+    });
+    if ("kind" in supportProof) throw new Error("support proof denied");
+    expect(
+      authorizeStaffCommand({
+        proof: supportProof,
+        context: {
+          ...allowed,
+          account: { ...account, id: "support-a" },
+          action: "restricted-reveal",
+        },
+        decisionId: "support-reveal-denied",
+        capability: "restricted.anonymous-author-linkage",
+        targetKind: "anonymous-linkage",
+        targetId: "linkage-a",
+        purpose: revealCaseId,
+      }),
+    ).toEqual({ kind: "deny", code: "action-not-available" });
+    await recordRestrictedRevealDenial({
+      runner,
+      authorization: authorize({
+        action: "restricted-reveal-denied",
+        capability: "audit.restricted-reveal-denial",
+        targetKind: "actor",
+        targetId: "support-a",
+        actorId: "authorization-boundary",
+      }),
+      actorId: "authorization-boundary",
+      deniedActorId: "support-a",
+      deniedActorRole: "support",
+      now,
+      audit: audit("support-reveal-denied-audit", "policy"),
+    });
+    expect(
+      (
+        await pool.query(
+          "select actor_role,reason_code,resulting_state,restricted_evidence_references from identity_safety_audit where id='support-reveal-denied-audit'",
+        )
+      ).rows[0],
+    ).toEqual({
+      actor_role: "system",
+      reason_code: "restricted-reveal-role-denied:support",
+      resulting_state: "denied",
+      restricted_evidence_references: [],
+    });
+    expect(
+      (
+        await pool.query(
+          "select count(*)::int count from audit_evidence_payloads where audit_id='support-reveal-denied-audit'",
+        )
+      ).rows[0],
+    ).toEqual({ count: 0 });
     await expect(
       loadRestrictedAttributionProjection({
         runner,
@@ -1707,6 +1814,30 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       accountId: account.id,
       caseReason: revealCaseId,
     });
+    await pool.query(
+      "update moderation_cases set state='resolved',original_reviewer_id='moderator-b',resolved_at=$2,evidence_expires_at=$3 where id=$1",
+      [revealCaseId, now, new Date(now.getTime() + 730 * 86_400_000)],
+    );
+    await expect(
+      loadRestrictedAttributionProjection({
+        runner,
+        authorization: authorize({
+          action: "restricted-reveal-project",
+          capability: "restricted.anonymous-author-linkage",
+          targetKind: "anonymous-linkage",
+          targetId: "linkage-a",
+          actorId: "moderator-b",
+          purpose: revealCaseId,
+          decisionId: "resolved-reveal-case",
+        }),
+        actorId: "moderator-b",
+        revealId: "reveal-a",
+        linkageId: "linkage-a",
+        caseReason: revealCaseId,
+        now,
+        audit: audit("resolved-reveal-not-projected", "policy"),
+      }),
+    ).resolves.toEqual({ kind: "not-authorized" });
     await expect(
       loadRestrictedAttributionProjection({
         runner,
@@ -1944,6 +2075,39 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       verified_contact: true,
       recovery_reverification_required: false,
       reverify_required: false,
+    });
+    const sensitiveAuditReferences = Object.fromEntries(
+      (
+        await pool.query<{
+          audit_id: string;
+          restricted_references: string[];
+        }>(
+          `select audit_id,restricted_references from audit_evidence_payloads
+           where audit_id = any($1::text[])`,
+          [
+            [
+              "claim-appealed",
+              "claim-appeal-decided",
+              "appeal-created",
+              "appeal-decided",
+              "recovery-pending",
+              "recovery-approved",
+              "recovery-contact-reverified",
+              "recovery-claim-reverified",
+            ],
+          ],
+        )
+      ).rows.map((row) => [row.audit_id, row.restricted_references]),
+    );
+    expect(sensitiveAuditReferences).toEqual({
+      "claim-appealed": ["claim-appeal:claim-appeal-a"],
+      "claim-appeal-decided": ["claim-appeal:claim-appeal-a"],
+      "appeal-created": ["moderation-appeal:appeal-a"],
+      "appeal-decided": ["moderation-appeal:appeal-a"],
+      "recovery-pending": ["recovery-review:recovery-a"],
+      "recovery-approved": ["recovery-review:recovery-a"],
+      "recovery-contact-reverified": [`account-recovery:${account.id}`],
+      "recovery-claim-reverified": [`claim-evidence:${claim.id}`],
     });
 
     const lifecycle = (

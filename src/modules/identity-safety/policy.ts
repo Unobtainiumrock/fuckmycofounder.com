@@ -309,6 +309,7 @@ function staffCommandAllowed(
     system: new Set([
       "finalize-deletion:account.lifecycle",
       "abuse-risk-review:trust-safety.risk-review",
+      "restricted-reveal-denied:audit.restricted-reveal-denial",
       "activate:account.lifecycle",
       "limit:account.lifecycle",
       "suspend:account.lifecycle",

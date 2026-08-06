@@ -89,6 +89,7 @@ export async function persistClaimAppeal(input: {
       occurredAt: input.now,
       priorState: requiredString(claim.state, "profile_claims.state"),
       resultingState: "appealed",
+      restrictedEvidenceReferences: [`claim-appeal:${input.id}`],
     });
     return "committed" as const;
   });
@@ -183,6 +184,7 @@ export async function persistClaimAppealDecision(input: {
       reasonCode: input.reasonCode,
       priorState: requiredString(appeal.claim_state, "profile_claims.state"),
       resultingState: input.resultingState,
+      restrictedEvidenceReferences: [`claim-appeal:${input.appealId}`],
     });
     return "committed" as const;
   });
@@ -257,6 +259,7 @@ export async function persistAppeal(input: {
       occurredAt: input.now,
       priorState: "resolved",
       resultingState: "appealed",
+      restrictedEvidenceReferences: [`moderation-appeal:${input.id}`],
     });
     return "committed" as const;
   });
@@ -339,6 +342,7 @@ export async function persistAppealDecision(input: {
       reasonCode: input.action.policyReason,
       priorState: "appealed",
       resultingState: "resolved",
+      restrictedEvidenceReferences: [`moderation-appeal:${input.appealId}`],
     });
     return "committed" as const;
   });

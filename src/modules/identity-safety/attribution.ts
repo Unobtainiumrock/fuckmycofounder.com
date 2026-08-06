@@ -61,14 +61,30 @@ export function createOrEditByline(input: {
 export function publicBylineProjection(
   byline: PublicByline,
   account: Account,
+  eligibility: {
+    readonly claim: ProfileClaim | null;
+    readonly recoveryReverificationRequired: boolean;
+    readonly claimReverificationRequired: boolean;
+  },
 ): PublicBylineProjection | null {
   if (account.state === "deleted") return null;
+  const profileId = byline.profileId;
+  const claimProjection = profileId
+    ? publicClaimProjection(profileId, eligibility.claim, {
+        id: account.id,
+        state: account.state,
+        verifiedContact: account.verifiedContact,
+        recoveryReverificationRequired:
+          eligibility.recoveryReverificationRequired,
+        claimReverificationRequired: eligibility.claimReverificationRequired,
+      })
+    : null;
   return {
     kind: "named",
     displayName: byline.displayName,
     ...(byline.photoUrl ? { photoUrl: byline.photoUrl } : {}),
-    ...(byline.claimedProfile && byline.profileId
-      ? { profile: { id: byline.profileId, claimed: true as const } }
+    ...(claimProjection?.claimed
+      ? { profile: { id: claimProjection.profileId, claimed: true as const } }
       : {}),
   };
 }
@@ -87,6 +103,9 @@ export function projectAttribution(input: {
   readonly available: boolean;
   readonly account: Account;
   readonly byline: PublicByline | null;
+  readonly claim?: ProfileClaim | null;
+  readonly recoveryReverificationRequired?: boolean;
+  readonly claimReverificationRequired?: boolean;
 }): PublicAttributionProjection {
   if (!input.available) {
     return { kind: "withheld", code: "attribution-unavailable" };
@@ -95,7 +114,12 @@ export function projectAttribution(input: {
   if (!input.byline)
     return { kind: "withheld", code: "attribution-unavailable" };
   return (
-    publicBylineProjection(input.byline, input.account) ?? {
+    publicBylineProjection(input.byline, input.account, {
+      claim: input.claim ?? null,
+      recoveryReverificationRequired:
+        input.recoveryReverificationRequired ?? true,
+      claimReverificationRequired: input.claimReverificationRequired ?? true,
+    }) ?? {
       kind: "withheld",
       code: "attribution-unavailable",
     }
@@ -179,15 +203,22 @@ export function publicClaimProjection(
   profileId: string,
   claim: ProfileClaim | null,
   account: {
+    readonly id: string;
     readonly state: Account["state"];
+    readonly verifiedContact: boolean;
     readonly recoveryReverificationRequired: boolean;
+    readonly claimReverificationRequired: boolean;
   },
 ): PublicClaimProjection {
   return {
     profileId,
     claimed:
       claim?.state === "verified" &&
+      claim.profileId === profileId &&
+      claim.accountId === account.id &&
       account.state === "active" &&
-      !account.recoveryReverificationRequired,
+      account.verifiedContact &&
+      !account.recoveryReverificationRequired &&
+      !account.claimReverificationRequired,
   };
 }
