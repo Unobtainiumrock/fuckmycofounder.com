@@ -3,7 +3,6 @@ import "server-only";
 // source-size: reason=identity safety commands keep authorization, one-transaction ownership, state effects, notices, and audit writes colocated
 
 import type {
-  Account,
   AuditEvent,
   AuthorizedDurableCommand,
   EnforcementAction,
@@ -11,282 +10,21 @@ import type {
   RestrictedModerationCaseRecord,
   RestrictedReportRecord,
   RestrictedField,
-} from "../../modules/identity-safety";
-import type {
-  TransactionContext,
-  TransactionRunner,
-} from "./transaction-runner";
-
-export async function persistAuthenticatedAccount(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly account: Account;
-  readonly method: {
-    readonly id: string;
-    readonly provider: string;
-    readonly subject: string;
-    readonly verifiedAt: Date;
-  };
-  readonly sessionId: string;
-  readonly audit: AuditEvent;
-}): Promise<void> {
-  assertAuthorized(input.authorization);
-  await input.runner.run(input.audit.id, async (tx) => {
-    await tx.query(
-      "insert into accounts (id, state, verified_contact) values ($1, $2, $3) on conflict (id) do nothing",
-      [input.account.id, input.account.state, input.account.verifiedContact],
-    );
-    await tx.query(
-      "insert into authentication_methods (id, account_id, provider, provider_subject, verified_at) values ($1,$2,$3,$4,$5)",
-      [
-        input.method.id,
-        input.account.id,
-        input.method.provider,
-        input.method.subject,
-        input.method.verifiedAt,
-      ],
-    );
-    await tx.query(
-      "insert into account_sessions (id, account_id) values ($1,$2)",
-      [input.sessionId, input.account.id],
-    );
-    await writeAudit(tx, input.audit);
-  });
-}
-
-export async function persistAccountLifecycle(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly account: Account;
-  readonly recentReauthentication: boolean;
-  readonly audit: AuditEvent;
-}): Promise<"committed" | "reauthentication-required"> {
-  assertAuthorized(input.authorization);
-  if (!input.recentReauthentication) return "reauthentication-required";
-  await input.runner.run(input.audit.id, async (tx) => {
-    await tx.query(
-      `update accounts set state=$2, deletion_requested_at=$3,
-       identity_erasure_due_at=$4, backup_erasure_due_at=$5, pre_deletion_state=$6 where id=$1`,
-      [
-        input.account.id,
-        input.account.state,
-        input.account.state === "deletion-pending"
-          ? input.account.deletionRequestedAt
-          : null,
-        input.account.state === "deleted"
-          ? input.account.identityErasureDueAt
-          : null,
-        input.account.state === "deleted"
-          ? input.account.backupErasureDueAt
-          : null,
-        input.account.state === "deletion-pending"
-          ? input.account.preDeletionState
-          : null,
-      ],
-    );
-    if (
-      input.account.state === "suspended" ||
-      input.account.state === "deletion-pending" ||
-      input.account.state === "deleted"
-    ) {
-      await tx.query(
-        "update account_sessions set revoked_at=now() where account_id=$1 and revoked_at is null",
-        [input.account.id],
-      );
-    }
-    await writeAudit(tx, input.audit);
-  });
-  return "committed";
-}
-
-export async function persistRecoveryDecision(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly recoveryId: string;
-  readonly accountId: string | null;
-  readonly state: "pending" | "approved" | "denied";
-  readonly holdUntil: Date;
-  readonly audit: AuditEvent;
-}): Promise<void> {
-  assertAuthorized(input.authorization);
-  await input.runner.run(input.audit.id, async (tx) => {
-    await tx.query(
-      "insert into recovery_reviews (id, account_id, state, hold_until, created_at) values ($1,$2,$3,$4,$5)",
-      [
-        input.recoveryId,
-        input.accountId,
-        input.state,
-        input.holdUntil,
-        input.audit.occurredAt,
-      ],
-    );
-    if (input.state === "approved" && input.accountId) {
-      await tx.query(
-        "update account_sessions set revoked_at=now() where account_id=$1 and revoked_at is null",
-        [input.accountId],
-      );
-      await writeNotice(tx, {
-        id: `${input.recoveryId}:notice`,
-        accountId: input.accountId,
-        kind: "recovery-approved",
-        message: "Account recovery completed. Sign in again.",
-        now: input.audit.occurredAt,
-      });
-    }
-    await writeAudit(tx, input.audit);
-  });
-}
-
-export async function persistAuthenticationMethodChange(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly accountId: string;
-  readonly recentReauthentication: boolean;
-  readonly operation: "add" | "remove" | "correct";
-  readonly method: {
-    readonly id: string;
-    readonly provider: string;
-    readonly subject: string;
-    readonly verifiedAt: Date;
-  };
-  readonly replacedMethodId?: string;
-  readonly audit: AuditEvent;
-}): Promise<"committed" | "reauthentication-required" | "last-method"> {
-  assertAuthorized(input.authorization);
-  if (!input.recentReauthentication) return "reauthentication-required";
-  return input.runner.run(input.audit.id, async (tx) => {
-    if (input.operation === "remove") {
-      const count = await tx.query<{ count: number }>(
-        "select count(*)::int as count from authentication_methods where account_id=$1",
-        [input.accountId],
-      );
-      if ((count.rows[0]?.count ?? 0) <= 1) return "last-method" as const;
-      await tx.query(
-        "delete from authentication_methods where id=$1 and account_id=$2",
-        [input.method.id, input.accountId],
-      );
-    } else {
-      if (input.operation === "correct" && input.replacedMethodId) {
-        await tx.query(
-          "delete from authentication_methods where id=$1 and account_id=$2",
-          [input.replacedMethodId, input.accountId],
-        );
-      }
-      await tx.query(
-        "insert into authentication_methods (id,account_id,provider,provider_subject,verified_at) values ($1,$2,$3,$4,$5)",
-        [
-          input.method.id,
-          input.accountId,
-          input.method.provider,
-          input.method.subject,
-          input.method.verifiedAt,
-        ],
-      );
-    }
-    await writeNotice(tx, {
-      id: `${input.audit.id}:notice`,
-      accountId: input.accountId,
-      kind: "authentication-method-changed",
-      message: "A sign-in method changed on your Account.",
-      now: input.audit.occurredAt,
-    });
-    await writeAudit(tx, input.audit);
-    return "committed" as const;
-  });
-}
-
-export async function loadAuthorizedAccountData(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly accountId: string;
-  readonly requesterAccountId: string;
-  readonly recentReauthentication: boolean;
-  readonly audit: AuditEvent;
-}): Promise<
-  | { readonly kind: "not-authorized" }
-  | {
-      readonly kind: "account-self-restricted";
-      readonly account: {
-        readonly id: string;
-        readonly state: string;
-        readonly verifiedContact: boolean;
-      };
-      readonly methods: readonly {
-        readonly provider: string;
-        readonly verifiedAt: Date;
-      }[];
-    }
-> {
-  assertAuthorized(input.authorization);
-  if (
-    input.accountId !== input.requesterAccountId ||
-    !input.recentReauthentication
-  ) {
-    return { kind: "not-authorized" };
-  }
-  return input.runner.run(input.audit.id, async (tx) => {
-    const account = await tx.query<{
-      id: string;
-      state: string;
-      verified_contact: boolean;
-    }>("select id,state,verified_contact from accounts where id=$1", [
-      input.accountId,
-    ]);
-    const methods = await tx.query<{ provider: string; verified_at: Date }>(
-      "select provider,verified_at from authentication_methods where account_id=$1 order by provider",
-      [input.accountId],
-    );
-    const row = account.rows[0];
-    if (!row) return { kind: "not-authorized" as const };
-    const projection = {
-      kind: "account-self-restricted" as const,
-      account: {
-        id: row.id,
-        state: row.state,
-        verifiedContact: row.verified_contact,
-      },
-      methods: methods.rows.map(({ provider, verified_at }) => ({
-        provider,
-        verifiedAt: verified_at,
-      })),
-    };
-    await writeAudit(tx, input.audit);
-    return projection;
-  });
-}
-
-export async function finalizePrivateIdentityErasure(input: {
-  readonly runner: TransactionRunner;
-  readonly authorization: AuthorizedDurableCommand;
-  readonly account: Extract<Account, { readonly state: "deleted" }>;
-  readonly now: Date;
-  readonly audit: AuditEvent;
-}): Promise<"committed" | "not-due"> {
-  assertAuthorized(input.authorization);
-  if (input.now < input.account.identityErasureDueAt) return "not-due";
-  await input.runner.run(input.audit.id, async (tx) => {
-    await tx.query("delete from authentication_methods where account_id=$1", [
-      input.account.id,
-    ]);
-    await tx.query("delete from account_sessions where account_id=$1", [
-      input.account.id,
-    ]);
-    await tx.query(
-      "update recovery_reviews set account_id=null where account_id=$1",
-      [input.account.id],
-    );
-    await tx.query(
-      "update accounts set verified_contact=false where id=$1 and state='deleted'",
-      [input.account.id],
-    );
-    await writeAudit(tx, input.audit);
-  });
-  return "committed";
-}
+} from "../../modules/identity-safety/server";
+import { restrictedAttributionFromAuditedRecord } from "../../modules/identity-safety/server";
+import {
+  addDays,
+  requireAuthorization,
+  requiredString,
+  writeAudit,
+  writeNotice,
+} from "./identity-safety-persistence-support";
+import type { TransactionRunner } from "./transaction-runner";
 
 export async function persistProfileClaim(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
+  readonly actorId: string;
   readonly claim: ProfileClaim;
   readonly reviewerId: string | null;
   readonly encryptedEvidence: Uint8Array | null;
@@ -296,15 +34,21 @@ export async function persistProfileClaim(input: {
   };
   readonly audit: AuditEvent;
 }): Promise<void> {
-  assertAuthorized(input.authorization);
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "profile-claim-write",
+    capability: "profile-claim.write",
+    targetKind: "claim",
+    targetId: input.claim.id,
+  });
   if (input.claim.state !== "pending" && !input.reviewerId) {
     throw new Error("Final Profile Claim decisions require a reviewer");
   }
   await input.runner.run(input.audit.id, async (tx) => {
     await tx.query(
-      `insert into profile_claims (id,account_id,profile_id,state,evidence_kind,encrypted_evidence,decided_at,evidence_expires_at,original_reviewer_id)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       on conflict (id) do update set state=excluded.state, decided_at=excluded.decided_at, evidence_expires_at=excluded.evidence_expires_at, original_reviewer_id=excluded.original_reviewer_id`,
+      `insert into profile_claims (id,account_id,profile_id,state,evidence_kind,encrypted_evidence,decided_at,evidence_expires_at,original_reviewer_id,appeal_deadline)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       on conflict (id) do update set state=excluded.state, decided_at=excluded.decided_at, evidence_expires_at=excluded.evidence_expires_at, original_reviewer_id=excluded.original_reviewer_id, appeal_deadline=excluded.appeal_deadline`,
       [
         input.claim.id,
         input.claim.accountId,
@@ -315,6 +59,7 @@ export async function persistProfileClaim(input: {
         input.claim.state === "pending" ? null : input.claim.decidedAt,
         input.claim.state === "pending" ? null : input.claim.evidenceExpiresAt,
         input.reviewerId,
+        input.claim.state === "pending" ? null : input.claim.appealDeadline,
       ],
     );
     if (input.challenge) {
@@ -334,8 +79,8 @@ export async function persistProfileClaim(input: {
         [input.claim.accountId],
       );
       await tx.query(
-        "update account_sessions set revoked_at=now() where account_id=$1 and revoked_at is null",
-        [input.claim.accountId],
+        "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
+        [input.claim.accountId, input.audit.occurredAt],
       );
     }
     await writeNotice(tx, {
@@ -352,12 +97,20 @@ export async function persistProfileClaim(input: {
 export async function persistReportAndCase(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
+  readonly actorId: string;
   readonly report: RestrictedReportRecord;
   readonly moderationCase: RestrictedModerationCaseRecord;
-  readonly targetSnapshot: unknown;
+  readonly targetSnapshot: Readonly<Record<string, unknown>>;
   readonly audit: AuditEvent;
 }): Promise<void> {
-  assertAuthorized(input.authorization);
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "report-create",
+    capability: "trust-safety.report",
+    targetKind: "report",
+    targetId: input.report.id,
+  });
+  const targetSnapshot = restrictedSnapshot(input.targetSnapshot);
   await input.runner.run(input.audit.id, async (tx) => {
     await tx.query(
       `insert into moderation_cases (id,target_id,state,queue,target_snapshot,created_at,evidence_expires_at) values ($1,$2,$3,$4,$5::jsonb,$6,$7)
@@ -367,9 +120,9 @@ export async function persistReportAndCase(input: {
         input.moderationCase.targetId,
         input.moderationCase.state,
         input.moderationCase.queue,
-        JSON.stringify(input.targetSnapshot),
+        targetSnapshot,
         input.report.createdAt,
-        new Date(input.report.createdAt.getTime() + 24 * 30 * 86400000),
+        null,
       ],
     );
     await tx.query(
@@ -384,7 +137,7 @@ export async function persistReportAndCase(input: {
         input.report.context ?? null,
         JSON.stringify(input.report.evidenceReferences),
         input.report.createdAt,
-        new Date(input.report.createdAt.getTime() + 24 * 30 * 86400000),
+        null,
       ],
     );
     await writeAudit(tx, input.audit);
@@ -394,17 +147,35 @@ export async function persistReportAndCase(input: {
 export async function persistEnforcement(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
+  readonly actorId: string;
+  readonly reviewerId: string;
   readonly id: string;
   readonly caseId: string;
+  readonly targetId: string;
   readonly affectedAccountId: string;
   readonly affectedClaimId?: string;
   readonly action: EnforcementAction;
   readonly audit: AuditEvent;
-}): Promise<void> {
-  assertAuthorized(input.authorization);
-  await input.runner.run(input.audit.id, async (tx) => {
+}): Promise<"committed" | "ineligible"> {
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "moderation-enforce",
+    capability: "trust-safety.enforce",
+    targetKind: "case",
+    targetId: input.caseId,
+  });
+  return input.runner.run(input.audit.id, async (tx) => {
+    const moderationCase = await tx.query<Record<string, unknown>>(
+      "select state,target_id from moderation_cases where id=$1 for update",
+      [input.caseId],
+    );
+    if (
+      moderationCase.rows[0]?.state !== "investigating" ||
+      moderationCase.rows[0]?.target_id !== input.targetId
+    )
+      return "ineligible" as const;
     await tx.query(
-      "insert into enforcement_actions (id,case_id,outcome,policy_reason,effective_at,scope_or_duration,appeal_deadline) values ($1,$2,$3,$4,$5,$6,$7)",
+      "insert into enforcement_actions (id,case_id,outcome,policy_reason,effective_at,scope_or_duration,appeal_deadline,affected_account_id) values ($1,$2,$3,$4,$5,$6,$7,$8)",
       [
         input.id,
         input.caseId,
@@ -412,13 +183,22 @@ export async function persistEnforcement(input: {
         input.action.policyReason,
         input.action.effectiveAt,
         input.action.scopeOrDuration,
-        input.action.appealable
-          ? new Date(input.action.effectiveAt.getTime() + 30 * 86400000)
-          : null,
+        input.action.appealable ? addDays(input.action.effectiveAt, 30) : null,
+        input.affectedAccountId,
       ],
     );
-    await tx.query("update moderation_cases set state='resolved' where id=$1", [
+    await tx.query(
+      "update moderation_cases set state='resolved',original_reviewer_id=$2,resolved_at=$3,evidence_expires_at=$4 where id=$1 and state='investigating'",
+      [
+        input.caseId,
+        input.reviewerId,
+        input.action.effectiveAt,
+        addDays(input.action.effectiveAt, 730),
+      ],
+    );
+    await tx.query("update reports set expires_at=$2 where case_id=$1", [
       input.caseId,
+      addDays(input.action.effectiveAt, 730),
     ]);
     if (
       input.action.outcome === "account-limited" ||
@@ -430,8 +210,8 @@ export async function persistEnforcement(input: {
       ]);
       if (input.action.outcome === "account-suspended")
         await tx.query(
-          "update account_sessions set revoked_at=now() where account_id=$1 and revoked_at is null",
-          [input.affectedAccountId],
+          "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
+          [input.affectedAccountId, input.action.effectiveAt],
         );
     }
     if (
@@ -443,7 +223,7 @@ export async function persistEnforcement(input: {
         [
           input.affectedClaimId,
           input.action.effectiveAt,
-          new Date(input.action.effectiveAt.getTime() + 90 * 86400000),
+          addDays(input.action.effectiveAt, 90),
         ],
       );
       await tx.query(
@@ -451,18 +231,19 @@ export async function persistEnforcement(input: {
         [input.affectedAccountId],
       );
       await tx.query(
-        "update account_sessions set revoked_at=now() where account_id=$1 and revoked_at is null",
-        [input.affectedAccountId],
+        "update account_sessions set revoked_at=$2 where account_id=$1 and revoked_at is null",
+        [input.affectedAccountId, input.action.effectiveAt],
       );
     }
     await writeNotice(tx, {
       id: `${input.id}:notice`,
       accountId: input.affectedAccountId,
       kind: "enforcement",
-      message: `${input.action.policyReason}: ${input.action.outcome}; ${input.action.scopeOrDuration}`,
+      message: `Target ${input.caseId}; ${input.action.policyReason}; ${input.action.outcome}; effective ${input.action.effectiveAt.toISOString()}; ${input.action.scopeOrDuration}; appeal ${input.action.appealable ? "available for 30 days" : "not available"}.`,
       now: input.action.effectiveAt,
     });
     await writeAudit(tx, input.audit);
+    return "committed" as const;
   });
 }
 
@@ -474,102 +255,148 @@ export async function recordRestrictedReveal(input: {
   readonly approverId: string;
   readonly caseReason: string;
   readonly field: RestrictedField;
-  readonly allowed: boolean;
   readonly audit: AuditEvent;
-}): Promise<void> {
-  assertAuthorized(input.authorization);
+}): Promise<{ readonly revealId: string; readonly auditId: string }> {
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "restricted-reveal",
+    capability: `restricted.${input.field}`,
+    targetKind: "case",
+    targetId: input.caseReason,
+  });
   if (!input.actorId || !input.approverId || !input.caseReason)
     throw new Error("Restricted reveal requires actor, approver, and reason");
   await input.runner.run(input.audit.id, async (tx) => {
+    await writeAudit(tx, input.audit);
     await tx.query(
-      "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,allowed,created_at) values ($1,$2,$3,$4,$5,$6,$7)",
+      "insert into restricted_reveals (id,actor_id,approver_id,case_reason,field_class,allowed,audit_id,created_at) values ($1,$2,$3,$4,$5,true,$6,$7)",
       [
         input.id,
         input.actorId,
         input.approverId,
         input.caseReason,
         input.field,
-        input.allowed,
+        input.audit.id,
         input.audit.occurredAt,
       ],
     );
-    await writeAudit(tx, input.audit);
   });
+  return { revealId: input.id, auditId: input.audit.id };
 }
 
 export async function recordAuditMutationAttempt(input: {
   readonly runner: TransactionRunner;
   readonly authorization: AuthorizedDurableCommand;
+  readonly actorId: string;
+  readonly targetAuditId: string;
+  readonly attemptedOperation: "update" | "delete";
   readonly event: AuditEvent;
 }): Promise<void> {
-  assertAuthorized(input.authorization);
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "audit-mutation-attempt",
+    capability: "audit.append-only",
+    targetKind: "audit",
+    targetId: input.targetAuditId,
+  });
   if (input.event.reasonCode !== "audit-mutation-denied") {
     throw new Error("Audit mutation attempts require the denial reason code");
   }
-  await input.runner.run(input.event.id, (tx) => writeAudit(tx, input.event));
+  await input.runner.run(input.event.id, async (tx) => {
+    await tx.query("savepoint rejected_audit_mutation");
+    try {
+      await tx.query(
+        input.attemptedOperation === "update"
+          ? "update identity_safety_audit set resulting_state='tampered' where id=$1"
+          : "delete from identity_safety_audit where id=$1",
+        [input.targetAuditId],
+      );
+      throw new Error("Append-only audit mutation was not rejected");
+    } catch (error) {
+      await tx.query("rollback to savepoint rejected_audit_mutation");
+      if (!(error instanceof Error) || !/append-only/u.test(error.message))
+        throw error;
+    }
+    await tx.query("release savepoint rejected_audit_mutation");
+    await writeAudit(tx, input.event);
+  });
 }
 
-function assertAuthorized(
-  decision: AuthorizedDurableCommand,
-): asserts decision is AuthorizedDurableCommand {
-  if (
-    decision.kind !== "authorized-durable-command" ||
-    !decision.decisionId ||
-    !decision.actorId ||
-    !decision.capability ||
-    !decision.policyVersion
-  ) {
-    throw new Error("Durable command requires a prior authorization decision");
-  }
+export async function loadRestrictedAttributionProjection(input: {
+  readonly runner: TransactionRunner;
+  readonly authorization: AuthorizedDurableCommand;
+  readonly actorId: string;
+  readonly revealId: string;
+  readonly linkageId: string;
+  readonly audit: AuditEvent;
+}): Promise<
+  | { readonly kind: "not-authorized" }
+  | {
+      readonly kind: "restricted";
+      readonly accountId: string;
+      readonly caseReason: string;
+    }
+> {
+  requireAuthorization(input.authorization, {
+    actorId: input.actorId,
+    action: "restricted-reveal-project",
+    capability: "restricted.anonymous-author-linkage",
+    targetKind: "reveal",
+    targetId: input.revealId,
+  });
+  return input.runner.run(input.audit.id, async (tx) => {
+    const result = await tx.query<Record<string, unknown>>(
+      `select r.case_reason,r.audit_id,l.account_id
+       from restricted_reveals r
+       join identity_safety_audit a on a.id=r.audit_id
+       join anonymous_linkages l on l.id=$2
+       where r.id=$1 and r.actor_id=$3 and r.allowed=true and r.field_class='anonymous-author-linkage'`,
+      [input.revealId, input.linkageId, input.actorId],
+    );
+    const row = result.rows[0];
+    if (!row) return { kind: "not-authorized" as const };
+    const projection = restrictedAttributionFromAuditedRecord({
+      accountId: requiredString(
+        row.account_id,
+        "anonymous_linkages.account_id",
+      ),
+      caseReason: requiredString(
+        row.case_reason,
+        "restricted_reveals.case_reason",
+      ),
+      revealId: input.revealId,
+      auditId: requiredString(row.audit_id, "restricted_reveals.audit_id"),
+    });
+    await writeAudit(tx, input.audit);
+    return { kind: "restricted" as const, ...projection };
+  });
 }
 
 export {
   persistAppeal,
   persistAppealDecision,
   persistClaimAppeal,
+  persistClaimAppealDecision,
 } from "./identity-safety-appeals";
 
-async function writeNotice(
-  tx: TransactionContext,
-  notice: {
-    readonly id: string;
-    readonly accountId: string;
-    readonly kind: string;
-    readonly message: string;
-    readonly now: Date;
-  },
-): Promise<void> {
-  await tx.query(
-    "insert into identity_safety_notices (id,account_id,kind,safe_message,created_at) values ($1,$2,$3,$4,$5)",
-    [notice.id, notice.accountId, notice.kind, notice.message, notice.now],
-  );
-}
+export {
+  finalizePrivateIdentityErasure,
+  loadAuthorizedAccountData,
+  persistAccountLifecycle,
+  persistAuthenticatedAccount,
+  persistAuthenticationMethodChange,
+  persistRecoveryDecision,
+} from "./identity-safety-account-commands";
+export {
+  persistAccountBlock,
+  persistBylineClaimLink,
+  persistPublicByline,
+} from "./identity-safety-public-commands";
+export { persistModerationCaseTransition } from "./identity-safety-moderation-commands";
 
-async function writeAudit(
-  tx: TransactionContext,
-  event: AuditEvent,
-): Promise<void> {
-  await tx.query(
-    `insert into identity_safety_audit (id,category,actor_role,occurred_at,reason_code,policy_version,prior_state,resulting_state,restricted_evidence_references) values ($1,$2,$3,$4,$5,$6,$7,$8,'[]'::jsonb)`,
-    [
-      event.id,
-      event.category,
-      event.actorRole,
-      event.occurredAt,
-      event.reasonCode,
-      event.policyVersion,
-      event.priorState,
-      event.resultingState,
-    ],
-  );
-  if (event.restrictedEvidenceReferences.length > 0) {
-    await tx.query(
-      "insert into audit_evidence_payloads (audit_id,restricted_references,expires_at) values ($1,$2::jsonb,$3)",
-      [
-        event.id,
-        JSON.stringify(event.restrictedEvidenceReferences),
-        new Date(event.occurredAt.getTime() + 24 * 30 * 86400000),
-      ],
-    );
-  }
+function restrictedSnapshot(value: Readonly<Record<string, unknown>>): string {
+  const serialized = JSON.stringify(value);
+  if (!serialized || serialized.length > 100_000)
+    throw new Error("Restricted target snapshot is invalid");
+  return serialized;
 }

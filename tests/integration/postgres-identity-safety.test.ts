@@ -4,30 +4,40 @@ import { Pool } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  authorizeAuthenticationProof,
   authorizeDurableCommand,
   executeProtectedAction,
   type Account,
   type PolicyContext,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 import { assertDisposableDatabaseUrl } from "@/src/platform/persistence/database-identity";
 import { createPostgresProtectedActionTransactions } from "@/src/platform/persistence/identity-safety-transactions";
 import {
   finalizePrivateIdentityErasure,
   loadAuthorizedAccountData,
+  loadRestrictedAttributionProjection,
   persistAccountLifecycle,
+  persistAccountBlock,
   persistAppeal,
   persistAppealDecision,
   persistAuthenticationMethodChange,
   persistAuthenticatedAccount,
   persistClaimAppeal,
+  persistClaimAppealDecision,
   persistEnforcement,
+  persistModerationCaseTransition,
+  persistPublicByline,
+  persistBylineClaimLink,
   persistProfileClaim,
   persistRecoveryDecision,
   persistReportAndCase,
   recordAuditMutationAttempt,
   recordRestrictedReveal,
 } from "@/src/platform/persistence/identity-safety-commands";
-import { runDurableRetention } from "@/src/platform/persistence/identity-safety-retention";
+import {
+  persistLegalHold,
+  runDurableRetention,
+} from "@/src/platform/persistence/identity-safety-retention";
 import { runMigrations } from "@/src/platform/persistence/migrations";
 import { createTransactionRunner } from "@/src/platform/persistence/transaction-runner";
 
@@ -56,15 +66,29 @@ const allowed: PolicyContext = {
   riskApproved: true,
   sensitive: false,
 };
-const authorizationDecision = authorizeDurableCommand({
-  context: allowed,
-  decisionId: "decision-a",
-  capability: "identity-safety-test",
-});
-if (authorizationDecision.kind !== "authorized-durable-command") {
-  throw new Error("Identity safety integration fixture must be authorized");
+
+function authorize(input: {
+  readonly action: string;
+  readonly capability: string;
+  readonly targetKind: string;
+  readonly targetId: string;
+  readonly actorId?: string;
+  readonly decisionId?: string;
+}) {
+  const actor = { ...account, id: input.actorId ?? account.id };
+  const decision = authorizeDurableCommand({
+    context: { ...allowed, account: actor, action: input.action },
+    decisionId:
+      input.decisionId ??
+      `${input.actorId ?? account.id}:${input.action}:${input.targetId}`,
+    capability: input.capability,
+    targetKind: input.targetKind,
+    targetId: input.targetId,
+  });
+  if (decision.kind !== "authorized-durable-command")
+    throw new Error("Identity safety integration command must be authorized");
+  return decision;
 }
-const authorization = authorizationDecision;
 
 describe.sequential("identity and safety PostgreSQL persistence", () => {
   const pool = new Pool({ connectionString: databaseUrl, max: 6 });
@@ -133,6 +157,31 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         directory: migrations,
       }),
     ).resolves.toHaveLength(2);
+  });
+
+  it("refuses a destructive rollback when operational data is populated", async () => {
+    await runMigrations({
+      appEnvironment: "test",
+      databaseUrl,
+      directory: migrations,
+    });
+    await pool.query(
+      "insert into accounts (id,state,verified_contact) values ('rollback-account','active',true); insert into account_sessions (id,account_id) values ('rollback-session','rollback-account')",
+    );
+    await expect(
+      runMigrations({
+        appEnvironment: "test",
+        count: 1,
+        databaseUrl,
+        directory: migrations,
+        direction: "down",
+      }),
+    ).rejects.toThrow(/rollback requires empty operational data/u);
+    expect(
+      await pool.query(
+        "select id from account_sessions where id='rollback-session'",
+      ),
+    ).toMatchObject({ rowCount: 1 });
   });
 
   it("authorizes before one owned transaction and atomically writes action plus audit", async () => {
@@ -274,29 +323,75 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     });
   });
 
-  it("durably coordinates identity, moderation, reveal, and retention state", async () => {
+  it("durably coordinates bound identity, moderation, appeal, reveal, and retention commands", async () => {
     await runMigrations({
       appEnvironment: "test",
       databaseUrl,
       directory: migrations,
     });
-    await persistAuthenticatedAccount({
-      runner,
-      authorization,
-      account,
-      method: {
-        id: "method-a",
-        provider: "google",
-        subject: "subject-a",
-        verifiedAt: now,
-      },
-      sessionId: "session-a",
-      audit: audit("account-created", "identity"),
+    const authentication = authorizeAuthenticationProof({
+      decisionId: "authentication-a",
+      accountId: account.id,
+      providerProofVerified: true,
     });
+    if (authentication.kind !== "authorized-durable-command")
+      throw new Error("fixture proof");
+    await expect(
+      persistAuthenticatedAccount({
+        runner,
+        authorization: authentication,
+        account,
+        method: {
+          id: "method-a",
+          provider: "google",
+          subject: "subject-a",
+          verifiedAt: now,
+        },
+        sessionId: "session-a",
+        audit: audit("account-created", "identity"),
+      }),
+    ).resolves.toBe("committed");
+    await pool.query(
+      "insert into accounts (id,state,verified_contact) values ('account-b','active',true),('account-deleted','deleted',false)",
+    );
+    const deletedProof = authorizeAuthenticationProof({
+      decisionId: "deleted-proof",
+      accountId: "account-deleted",
+      providerProofVerified: true,
+    });
+    if (deletedProof.kind !== "authorized-durable-command")
+      throw new Error("fixture proof");
+    await expect(
+      persistAuthenticatedAccount({
+        runner,
+        authorization: deletedProof,
+        account: {
+          id: "account-deleted",
+          state: "deleted",
+          verifiedContact: false,
+          identityErasureDueAt: now,
+          backupErasureDueAt: now,
+        },
+        method: {
+          id: "deleted-method",
+          provider: "apple",
+          subject: "deleted-subject",
+          verifiedAt: now,
+        },
+        sessionId: "deleted-session",
+        audit: audit("deleted-auth-denied", "identity"),
+      }),
+    ).resolves.toBe("deleted-account");
+
     await expect(
       persistAuthenticationMethodChange({
         runner,
-        authorization,
+        authorization: authorize({
+          action: "add-authentication-method",
+          capability: "account.authentication-method",
+          targetKind: "account",
+          targetId: account.id,
+        }),
         accountId: account.id,
         recentReauthentication: true,
         operation: "add",
@@ -309,63 +404,111 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
         audit: audit("method-added", "identity"),
       }),
     ).resolves.toBe("committed");
+    const removals = await Promise.all([
+      persistAuthenticationMethodChange({
+        runner,
+        authorization: authorize({
+          action: "remove-authentication-method",
+          capability: "account.authentication-method",
+          targetKind: "account",
+          targetId: account.id,
+          decisionId: "remove-a",
+        }),
+        accountId: account.id,
+        recentReauthentication: true,
+        operation: "remove",
+        method: {
+          id: "method-a",
+          provider: "google",
+          subject: "subject-a",
+          verifiedAt: now,
+        },
+        audit: audit("method-remove-a", "identity"),
+      }),
+      persistAuthenticationMethodChange({
+        runner,
+        authorization: authorize({
+          action: "remove-authentication-method",
+          capability: "account.authentication-method",
+          targetKind: "account",
+          targetId: account.id,
+          decisionId: "remove-b",
+        }),
+        accountId: account.id,
+        recentReauthentication: true,
+        operation: "remove",
+        method: {
+          id: "method-b",
+          provider: "apple",
+          subject: "subject-b",
+          verifiedAt: now,
+        },
+        audit: audit("method-remove-b", "identity"),
+      }),
+    ]);
+    expect(removals.sort()).toEqual(["committed", "last-method"]);
     await expect(
       loadAuthorizedAccountData({
         runner,
-        authorization,
+        authorization: authorize({
+          action: "account-export",
+          capability: "account.export",
+          targetKind: "account",
+          targetId: account.id,
+        }),
         accountId: account.id,
         requesterAccountId: account.id,
         recentReauthentication: true,
         audit: audit("account-exported", "identity"),
       }),
-    ).resolves.toMatchObject({
-      kind: "account-self-restricted",
-      methods: [{ provider: "apple" }, { provider: "google" }],
-    });
-    const pending = {
-      ...account,
-      state: "deletion-pending" as const,
-      preDeletionState: "active" as const,
-      deletionRequestedAt: now,
-    };
+    ).resolves.toMatchObject({ kind: "account-self-restricted" });
     await expect(
-      persistAccountLifecycle({
+      persistAccountBlock({
         runner,
-        authorization,
-        account: pending,
-        recentReauthentication: false,
-        audit: audit("delete-denied", "identity"),
+        authorization: authorize({
+          action: "account-export",
+          capability: "account.export",
+          targetKind: "account",
+          targetId: account.id,
+          decisionId: "wrong-binding",
+        }),
+        blockerId: account.id,
+        blockedId: "account-b",
+        now,
+        audit: audit("wrong-block", "moderation"),
       }),
-    ).resolves.toBe("reauthentication-required");
+    ).rejects.toThrow(/does not match/u);
+    await persistAccountBlock({
+      runner,
+      authorization: authorize({
+        action: "account-block",
+        capability: "trust-safety.block",
+        targetKind: "account",
+        targetId: "account-b",
+      }),
+      blockerId: account.id,
+      blockedId: "account-b",
+      now,
+      audit: audit("block-created", "moderation"),
+    });
     await expect(
-      persistAccountLifecycle({
+      persistPublicByline({
         runner,
-        authorization,
-        account: pending,
-        recentReauthentication: true,
-        audit: audit("delete-started", "identity"),
+        authorization: authorize({
+          action: "byline-write",
+          capability: "public-byline.write",
+          targetKind: "account",
+          targetId: account.id,
+        }),
+        accountId: account.id,
+        displayName: "Ada Founder",
+        now,
+        impersonationSignal: false,
+        editId: "byline-edit-a",
+        audit: audit("byline-created", "identity"),
       }),
     ).resolves.toBe("committed");
-    expect(
-      await pool.query("select state, pre_deletion_state from accounts"),
-    ).toMatchObject({
-      rows: [{ state: "deletion-pending", pre_deletion_state: "active" }],
-    });
-    const sessions = await pool.query<{ revoked_at: Date | null }>(
-      "select revoked_at from account_sessions",
-    );
-    expect(sessions.rows[0]?.revoked_at).toBeInstanceOf(Date);
 
-    await pool.query("update accounts set state='active' where id='account-a'");
-    await persistRecoveryDecision({
-      runner,
-      authorization,
-      recoveryId: "recovery-a",
-      accountId: account.id,
-      state: "approved",
-      holdUntil: now,
-      audit: audit("recovery-approved", "identity"),
-    });
     const claim = {
       id: "claim-a",
       accountId: account.id,
@@ -378,7 +521,14 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     };
     await persistProfileClaim({
       runner,
-      authorization,
+      authorization: authorize({
+        action: "profile-claim-write",
+        capability: "profile-claim.write",
+        targetKind: "claim",
+        targetId: claim.id,
+        actorId: "identity-reviewer-a",
+      }),
+      actorId: "identity-reviewer-a",
       claim,
       reviewerId: "identity-reviewer-a",
       encryptedEvidence: new Uint8Array([1, 2, 3]),
@@ -386,15 +536,35 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       audit: audit("claim-verified", "claim"),
     });
     await expect(
+      persistBylineClaimLink({
+        runner,
+        authorization: authorize({
+          action: "byline-claim-link",
+          capability: "public-byline.claim",
+          targetKind: "claim",
+          targetId: claim.id,
+        }),
+        accountId: account.id,
+        claimId: claim.id,
+        enabled: true,
+        audit: audit("byline-claim-linked", "claim"),
+      }),
+    ).resolves.toBe("committed");
+    await expect(
       persistClaimAppeal({
         runner,
-        authorization,
+        authorization: authorize({
+          action: "profile-claim-appeal",
+          capability: "profile-claim.appeal",
+          targetKind: "claim",
+          targetId: claim.id,
+          decisionId: "claim-conflict",
+        }),
         id: "claim-appeal-conflict",
-        claim,
+        claimId: claim.id,
         appellantAccountId: account.id,
         reviewerId: "identity-reviewer-a",
-        originalReviewerId: "identity-reviewer-a",
-        newContext: "conflicted review",
+        newContext: "conflict",
         now,
         audit: audit("claim-appeal-conflict", "appeal"),
       }),
@@ -402,17 +572,62 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     await expect(
       persistClaimAppeal({
         runner,
-        authorization,
+        authorization: authorize({
+          action: "profile-claim-appeal",
+          capability: "profile-claim.appeal",
+          targetKind: "claim",
+          targetId: claim.id,
+        }),
         id: "claim-appeal-a",
-        claim,
+        claimId: claim.id,
         appellantAccountId: account.id,
         reviewerId: "identity-reviewer-b",
-        originalReviewerId: "identity-reviewer-a",
-        newContext: "new claim evidence",
+        newContext: "new evidence",
         now,
         audit: audit("claim-appealed", "appeal"),
       }),
     ).resolves.toBe("committed");
+    await runDurableRetention({
+      runner,
+      authorization: authorize({
+        action: "retention-run",
+        capability: "retention.execute",
+        targetKind: "retention-job",
+        targetId: "retention-claim",
+        actorId: "retention-worker",
+      }),
+      actorId: "retention-worker",
+      jobId: "retention-claim",
+      now,
+      audit: audit("retention-claim", "retention"),
+    });
+    expect(
+      (
+        await pool.query<{ encrypted_evidence: unknown }>(
+          "select encrypted_evidence from profile_claims where id='claim-a'",
+        )
+      ).rows[0]?.encrypted_evidence,
+    ).not.toBeNull();
+    await expect(
+      persistClaimAppealDecision({
+        runner,
+        authorization: authorize({
+          action: "profile-claim-appeal-decision",
+          capability: "profile-claim.appeal-decide",
+          targetKind: "claim-appeal",
+          targetId: "claim-appeal-a",
+          actorId: "identity-reviewer-b",
+        }),
+        actorId: "identity-reviewer-b",
+        id: "claim-appeal-decision-a",
+        appealId: "claim-appeal-a",
+        resultingState: "verified",
+        reasonCode: "decision-upheld",
+        now,
+        audit: audit("claim-appeal-decided", "appeal"),
+      }),
+    ).resolves.toBe("committed");
+
     const report = {
       id: "report-a",
       caseId: "case-a",
@@ -421,7 +636,7 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
       reason: "harassment" as const,
       context: "restricted context",
       evidenceReferences: ["evidence-a"],
-      createdAt: new Date(now.getTime() - 25 * 30 * 86_400_000),
+      createdAt: now,
     };
     const moderationCase = {
       id: "case-a",
@@ -432,148 +647,460 @@ describe.sequential("identity and safety PostgreSQL persistence", () => {
     };
     await persistReportAndCase({
       runner,
-      authorization,
+      authorization: authorize({
+        action: "report-create",
+        capability: "trust-safety.report",
+        targetKind: "report",
+        targetId: report.id,
+      }),
+      actorId: account.id,
       report,
       moderationCase,
       targetSnapshot: { private: "snapshot" },
       audit: audit("report-created", "moderation"),
     });
-    await persistEnforcement({
+    await persistModerationCaseTransition({
       runner,
-      authorization,
-      id: "enforcement-a",
+      authorization: authorize({
+        action: "moderation-triage",
+        capability: "trust-safety.moderate",
+        targetKind: "case",
+        targetId: moderationCase.id,
+        actorId: "moderator-a",
+      }),
+      actorId: "moderator-a",
       caseId: moderationCase.id,
-      affectedAccountId: account.id,
-      action: {
-        outcome: "account-limited",
-        policyReason: "harassment",
-        effectiveAt: now,
-        scopeOrDuration: "30 days",
-        appealable: true,
-      },
-      audit: audit("enforcement-created", "enforcement"),
+      operation: "triage",
+      now,
+      audit: audit("case-triaged", "moderation"),
+    });
+    await persistModerationCaseTransition({
+      runner,
+      authorization: authorize({
+        action: "moderation-investigate",
+        capability: "trust-safety.moderate",
+        targetKind: "case",
+        targetId: moderationCase.id,
+        actorId: "moderator-a",
+      }),
+      actorId: "moderator-a",
+      caseId: moderationCase.id,
+      operation: "investigate",
+      now,
+      audit: audit("case-investigating", "moderation"),
     });
     await expect(
-      persistAppeal({
+      persistEnforcement({
         runner,
-        authorization,
-        id: "appeal-expired",
+        authorization: authorize({
+          action: "moderation-enforce",
+          capability: "trust-safety.enforce",
+          targetKind: "case",
+          targetId: moderationCase.id,
+          actorId: "moderator-a",
+        }),
+        actorId: "moderator-a",
+        reviewerId: "moderator-a",
+        id: "enforcement-a",
         caseId: moderationCase.id,
-        appellantAccountId: account.id,
-        reviewerId: "moderator-b",
-        originalReviewerId: "moderator-a",
+        targetId: "object-a",
         affectedAccountId: account.id,
-        appealDeadline: new Date(now.getTime() - 1),
-        newContext: "too late",
-        now,
-        audit: audit("appeal-expired", "appeal"),
+        action: {
+          outcome: "account-limited",
+          policyReason: "harassment",
+          effectiveAt: now,
+          scopeOrDuration: "30 days",
+          appealable: true,
+        },
+        audit: audit("enforcement-created", "enforcement"),
       }),
-    ).resolves.toBe("ineligible");
+    ).resolves.toBe("committed");
     await expect(
       persistAppeal({
         runner,
-        authorization,
+        authorization: authorize({
+          action: "moderation-appeal",
+          capability: "trust-safety.appeal",
+          targetKind: "case",
+          targetId: moderationCase.id,
+          decisionId: "appeal-conflict",
+        }),
+        id: "appeal-conflict",
+        caseId: moderationCase.id,
+        appellantAccountId: account.id,
+        reviewerId: "moderator-a",
+        newContext: "conflict",
+        now,
+        audit: audit("appeal-conflict", "appeal"),
+      }),
+    ).resolves.toBe("reviewer-conflict");
+    await expect(
+      persistAppeal({
+        runner,
+        authorization: authorize({
+          action: "moderation-appeal",
+          capability: "trust-safety.appeal",
+          targetKind: "case",
+          targetId: moderationCase.id,
+        }),
         id: "appeal-a",
         caseId: moderationCase.id,
         appellantAccountId: account.id,
         reviewerId: "moderator-b",
-        originalReviewerId: "moderator-a",
-        affectedAccountId: account.id,
-        appealDeadline: new Date(now.getTime() + 30 * 86_400_000),
         newContext: "new context",
         now,
         audit: audit("appeal-created", "appeal"),
       }),
     ).resolves.toBe("committed");
-    await persistAppealDecision({
-      runner,
-      authorization,
-      id: "appeal-decision-a",
-      appealId: "appeal-a",
-      originalEnforcementId: "enforcement-a",
-      newEnforcementId: "enforcement-appeal-a",
-      affectedAccountId: account.id,
-      reviewerId: "moderator-b",
-      action: {
-        outcome: "none",
-        policyReason: "appeal-reversed",
-        effectiveAt: now,
-        scopeOrDuration: "reversed",
-        appealable: false,
-      },
-      resultingAccountState: "active",
-      audit: audit("appeal-decided", "appeal"),
-    });
+    await expect(
+      persistAppealDecision({
+        runner,
+        authorization: authorize({
+          action: "moderation-appeal-decision",
+          capability: "trust-safety.appeal-decide",
+          targetKind: "appeal",
+          targetId: "appeal-a",
+          actorId: "moderator-b",
+        }),
+        actorId: "moderator-b",
+        id: "appeal-decision-a",
+        appealId: "appeal-a",
+        newEnforcementId: "enforcement-appeal-a",
+        action: {
+          outcome: "none",
+          policyReason: "appeal-reversed",
+          effectiveAt: now,
+          scopeOrDuration: "reversed",
+          appealable: false,
+        },
+        resultingAccountState: "active",
+        audit: audit("appeal-decided", "appeal"),
+      }),
+    ).resolves.toBe("committed");
     expect(
-      await pool.query("select id from enforcement_actions order by id"),
-    ).toMatchObject({
-      rows: [{ id: "enforcement-a" }, { id: "enforcement-appeal-a" }],
-    });
-    expect(await pool.query("select state from accounts")).toMatchObject({
-      rows: [{ state: "active" }],
-    });
+      (await pool.query("select id from enforcement_actions order by id")).rows,
+    ).toEqual([{ id: "enforcement-a" }, { id: "enforcement-appeal-a" }]);
+
+    await pool.query(
+      "insert into anonymous_linkages (id,account_id,encrypted_payload,expires_at) values ('linkage-a',$1,$2,$3)",
+      [account.id, new Uint8Array([4]), new Date(now.getTime() + 86_400_000)],
+    );
     await recordRestrictedReveal({
       runner,
-      authorization,
+      authorization: authorize({
+        action: "restricted-reveal",
+        capability: "restricted.anonymous-author-linkage",
+        targetKind: "case",
+        targetId: moderationCase.id,
+        actorId: "moderator-b",
+      }),
       id: "reveal-a",
       actorId: "moderator-b",
       approverId: "lead-a",
       caseReason: moderationCase.id,
-      field: "reporter-identity",
-      allowed: true,
+      field: "anonymous-author-linkage",
       audit: audit("reveal-recorded", "moderation"),
+    });
+    await expect(
+      loadRestrictedAttributionProjection({
+        runner,
+        authorization: authorize({
+          action: "restricted-reveal-project",
+          capability: "restricted.anonymous-author-linkage",
+          targetKind: "reveal",
+          targetId: "reveal-a",
+          actorId: "moderator-b",
+        }),
+        actorId: "moderator-b",
+        revealId: "reveal-a",
+        linkageId: "linkage-a",
+        audit: audit("reveal-projected", "moderation"),
+      }),
+    ).resolves.toEqual({
+      kind: "restricted",
+      accountId: account.id,
+      caseReason: moderationCase.id,
     });
     await recordAuditMutationAttempt({
       runner,
-      authorization,
+      authorization: authorize({
+        action: "audit-mutation-attempt",
+        capability: "audit.append-only",
+        targetKind: "audit",
+        targetId: "account-created",
+        actorId: "moderator-b",
+      }),
+      actorId: "moderator-b",
+      targetAuditId: "account-created",
+      attemptedOperation: "update",
       event: {
         ...audit("audit-denial", "moderation"),
         reasonCode: "audit-mutation-denied",
       },
     });
+
+    await pool.query("update reports set expires_at=$2 where id=$1", [
+      report.id,
+      now,
+    ]);
+    await persistLegalHold({
+      runner,
+      authorization: authorize({
+        action: "legal-hold-apply",
+        capability: "retention.legal-hold",
+        targetKind: "report",
+        targetId: report.id,
+        actorId: "legal-a",
+      }),
+      actorId: "legal-a",
+      holdId: "hold-report-a",
+      scopeKind: "report",
+      scopeId: report.id,
+      authority: "counsel-ticket-1",
+      reason: "active matter",
+      operation: "apply",
+      now,
+      audit: audit("hold-applied", "retention"),
+    });
     await runDurableRetention({
       runner,
-      authorization,
+      authorization: authorize({
+        action: "retention-run",
+        capability: "retention.execute",
+        targetKind: "retention-job",
+        targetId: "retention-held",
+        actorId: "retention-worker",
+      }),
+      actorId: "retention-worker",
+      jobId: "retention-held",
       now,
-      audit: audit("retention-run", "retention"),
+      audit: audit("retention-held", "retention"),
     });
-    await pool.query("update accounts set state='deleted' where id=$1", [
-      account.id,
-    ]);
+    expect(
+      (
+        await pool.query<{ private_context: string | null }>(
+          "select private_context from reports where id=$1",
+          [report.id],
+        )
+      ).rows[0]?.private_context,
+    ).toBe("restricted context");
+    await persistLegalHold({
+      runner,
+      authorization: authorize({
+        action: "legal-hold-release",
+        capability: "retention.legal-hold",
+        targetKind: "report",
+        targetId: report.id,
+        actorId: "legal-a",
+      }),
+      actorId: "legal-a",
+      holdId: "hold-report-a",
+      scopeKind: "report",
+      scopeId: report.id,
+      authority: "counsel-ticket-1",
+      reason: "matter closed",
+      operation: "release",
+      now,
+      audit: audit("hold-released", "retention"),
+    });
+    await runDurableRetention({
+      runner,
+      authorization: authorize({
+        action: "retention-run",
+        capability: "retention.execute",
+        targetKind: "retention-job",
+        targetId: "retention-final",
+        actorId: "retention-worker",
+      }),
+      actorId: "retention-worker",
+      jobId: "retention-final",
+      now,
+      audit: audit("retention-final", "retention"),
+    });
+    expect(
+      (
+        await pool.query<{ private_context: string | null }>(
+          "select private_context from reports where id=$1",
+          [report.id],
+        )
+      ).rows[0]?.private_context,
+    ).toBeNull();
+
+    await persistRecoveryDecision({
+      runner,
+      authorization: authorize({
+        action: "recovery-pending",
+        capability: "account.recovery",
+        targetKind: "recovery",
+        targetId: "recovery-a",
+        actorId: "recovery-reviewer",
+      }),
+      actorId: "recovery-reviewer",
+      recoveryId: "recovery-a",
+      state: "pending",
+      accountId: account.id,
+      holdUntil: now,
+      proofVerified: true,
+      now,
+      audit: audit("recovery-pending", "identity"),
+    });
+    await expect(
+      persistRecoveryDecision({
+        runner,
+        authorization: authorize({
+          action: "recovery-approved",
+          capability: "account.recovery",
+          targetKind: "recovery",
+          targetId: "recovery-a",
+          actorId: "recovery-reviewer",
+        }),
+        actorId: "recovery-reviewer",
+        recoveryId: "recovery-a",
+        state: "approved",
+        now,
+        audit: audit("recovery-approved", "identity"),
+      }),
+    ).resolves.toBe("committed");
+    expect(
+      (
+        await pool.query<{ count: number }>(
+          "select verified_contact,recovery_reverification_required from accounts where id=$1",
+          [account.id],
+        )
+      ).rows[0],
+    ).toEqual({
+      verified_contact: false,
+      recovery_reverification_required: true,
+    });
+
+    const lifecycle = (
+      operation: "request-deletion" | "cancel-deletion" | "finalize-deletion",
+      id: string,
+      at: Date,
+      recentReauthentication: boolean,
+    ) =>
+      persistAccountLifecycle({
+        runner,
+        authorization: authorize({
+          action: operation,
+          capability: "account.lifecycle",
+          targetKind: "account",
+          targetId: account.id,
+          actorId:
+            operation === "finalize-deletion" ? "deletion-worker" : account.id,
+          decisionId: id,
+        }),
+        actorId:
+          operation === "finalize-deletion" ? "deletion-worker" : account.id,
+        accountId: account.id,
+        operation,
+        recentReauthentication,
+        now: at,
+        audit: audit(id, "identity"),
+      });
+    await expect(
+      lifecycle("request-deletion", "delete-stale", now, false),
+    ).resolves.toBe("reauthentication-required");
+    await expect(
+      lifecycle("request-deletion", "delete-start", now, true),
+    ).resolves.toBe("committed");
+    await expect(
+      lifecycle("cancel-deletion", "delete-cancel", now, true),
+    ).resolves.toBe("committed");
+    await expect(
+      lifecycle("request-deletion", "delete-restart", now, true),
+    ).resolves.toBe("committed");
+    const finalizationTime = new Date(now.getTime() + 31 * 86_400_000);
+    await expect(
+      lifecycle(
+        "finalize-deletion",
+        "delete-finalize",
+        finalizationTime,
+        false,
+      ),
+    ).resolves.toBe("committed");
+    const erasureTime = new Date(finalizationTime.getTime() + 30 * 86_400_000);
+    await persistLegalHold({
+      runner,
+      authorization: authorize({
+        action: "legal-hold-apply",
+        capability: "retention.legal-hold",
+        targetKind: "account",
+        targetId: account.id,
+        actorId: "legal-a",
+        decisionId: "hold-account",
+      }),
+      actorId: "legal-a",
+      holdId: "hold-account-a",
+      scopeKind: "account",
+      scopeId: account.id,
+      authority: "counsel-ticket-2",
+      reason: "preservation",
+      operation: "apply",
+      now: erasureTime,
+      audit: audit("account-hold-applied", "retention"),
+    });
     await expect(
       finalizePrivateIdentityErasure({
         runner,
-        authorization,
-        account: {
-          ...account,
-          state: "deleted",
-          identityErasureDueAt: now,
-          backupErasureDueAt: new Date(now.getTime() + 60 * 86_400_000),
-        },
-        now,
+        authorization: authorize({
+          action: "erase-private-identity",
+          capability: "retention.identity",
+          targetKind: "account",
+          targetId: account.id,
+          actorId: "retention-worker",
+          decisionId: "erasure-held",
+        }),
+        actorId: "retention-worker",
+        accountId: account.id,
+        now: erasureTime,
+        audit: audit("identity-erasure-held", "retention"),
+      }),
+    ).resolves.toBe("legal-hold");
+    await persistLegalHold({
+      runner,
+      authorization: authorize({
+        action: "legal-hold-release",
+        capability: "retention.legal-hold",
+        targetKind: "account",
+        targetId: account.id,
+        actorId: "legal-a",
+        decisionId: "release-account",
+      }),
+      actorId: "legal-a",
+      holdId: "hold-account-a",
+      scopeKind: "account",
+      scopeId: account.id,
+      authority: "counsel-ticket-2",
+      reason: "released",
+      operation: "release",
+      now: erasureTime,
+      audit: audit("account-hold-released", "retention"),
+    });
+    await expect(
+      finalizePrivateIdentityErasure({
+        runner,
+        authorization: authorize({
+          action: "erase-private-identity",
+          capability: "retention.identity",
+          targetKind: "account",
+          targetId: account.id,
+          actorId: "retention-worker",
+        }),
+        actorId: "retention-worker",
+        accountId: account.id,
+        now: erasureTime,
         audit: audit("identity-erased", "retention"),
       }),
     ).resolves.toBe("committed");
     expect(
-      await pool.query(
-        "select private_context, evidence_references from reports",
-      ),
-    ).toMatchObject({
-      rows: [{ private_context: null, evidence_references: [] }],
-    });
-    expect(
-      await pool.query("select count(*)::int as count from restricted_reveals"),
-    ).toMatchObject({ rows: [{ count: 1 }] });
-    expect(
-      await pool.query(
-        "select count(*)::int as count from identity_safety_audit",
-      ),
-    ).toMatchObject({ rows: [{ count: 15 }] });
-    expect(
-      await pool.query(
-        "select count(*)::int as count from authentication_methods",
-      ),
-    ).toMatchObject({ rows: [{ count: 0 }] });
+      (
+        await pool.query<{ count: number }>(
+          "select count(*)::int count from authentication_methods where account_id=$1",
+          [account.id],
+        )
+      ).rows[0]?.count,
+    ).toBe(0);
   });
 });
 

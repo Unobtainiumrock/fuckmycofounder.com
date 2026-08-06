@@ -8,7 +8,7 @@ import {
   type RetainedRecord,
   type RestrictedField,
   type StaffRole,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 
 const now = new Date("2026-08-05T12:00:00.000Z");
 const event: AuditEvent = {

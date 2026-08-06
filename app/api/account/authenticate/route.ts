@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import {
-  authenticateProtectedIntent,
-  type AuthenticationProvider,
-} from "@/src/modules/identity-safety";
 import { createDeterministicAuthenticationAdapter } from "@/src/platform/auth/deterministic-auth";
 
 const requestSchema = z.object({
@@ -33,27 +29,23 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  const result = await authenticateProtectedIntent(
-    {
-      provider: parsed.data.provider,
-      proof: parsed.data.proof,
-      intent: {
-        action: parsed.data.intent.action,
-        returnPath: parsed.data.intent.returnPath,
-        ...(parsed.data.intent.draftReference
-          ? { draftReference: parsed.data.intent.draftReference }
-          : {}),
-      },
+  const result = await disabled.authenticate({
+    provider: parsed.data.provider,
+    proof: parsed.data.proof,
+    intent: {
+      action: parsed.data.intent.action,
+      returnPath: parsed.data.intent.returnPath,
+      ...(parsed.data.intent.draftReference
+        ? { draftReference: parsed.data.intent.draftReference }
+        : {}),
     },
-    (input) => disabled.authenticate(input),
-  );
+  });
   return NextResponse.json(result, { status: 503 });
 }
 
 function disabledMethod(): {
   readonly availability: "disabled";
   readonly validProof: string;
-  readonly provider?: AuthenticationProvider;
 } {
   return { availability: "disabled", validProof: "never" };
 }

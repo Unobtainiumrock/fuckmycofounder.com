@@ -19,7 +19,7 @@ import {
   type Account,
   type AuthenticationMethod,
   type ProtectedIntent,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 import { createDeterministicAuthenticationAdapter } from "@/src/platform/auth/deterministic-auth";
 import { findProjectionLeaks } from "@/tests/support/noninterference";
 

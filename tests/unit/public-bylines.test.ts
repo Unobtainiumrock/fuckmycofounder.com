@@ -12,11 +12,11 @@ import {
   projectAttribution,
   publicResponseAttribution,
   publicBylineProjection,
-  restrictedAttribution,
+  restrictedAttributionFromAuditedRecord,
   type Account,
   type ProfileClaim,
   type PublicByline,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 import { findProjectionLeaks } from "@/tests/support/noninterference";
 
 const now = new Date("2026-08-05T12:00:00.000Z");
@@ -117,20 +117,14 @@ describe("Public Bylines and attribution", () => {
       account,
       byline,
     });
-    const input = {
-      mode: "anonymous" as const,
-      available: true,
-      account,
-      byline,
-    };
     const surfaces = {
-      response: publicResponseAttribution(input),
-      metadata: metadataAttribution(input),
-      logs: ordinaryLogAttribution(input),
-      events: eventAttribution(input),
-      export: exportAttribution(input),
-      errors: errorAttribution(input),
-      notification: notificationAttribution(input),
+      response: publicResponseAttribution(anonymous),
+      metadata: metadataAttribution(anonymous),
+      logs: ordinaryLogAttribution(anonymous),
+      events: eventAttribution(anonymous),
+      export: exportAttribution(anonymous),
+      errors: errorAttribution(anonymous),
+      notification: notificationAttribution(anonymous),
     };
     expect(anonymous).toEqual({
       kind: "anonymous",
@@ -157,19 +151,13 @@ describe("Public Bylines and attribution", () => {
     ).toEqual({ kind: "withheld", code: "attribution-unavailable" });
   });
 
-  it("reveals anonymous linkage only through the restricted authorized interface", () => {
+  it("derives a restricted projection only from an audited reveal record", () => {
     expect(
-      restrictedAttribution({
+      restrictedAttributionFromAuditedRecord({
         accountId: account.id,
         caseReason: "case-1",
-        authorized: false,
-      }),
-    ).toBeNull();
-    expect(
-      restrictedAttribution({
-        accountId: account.id,
-        caseReason: "case-1",
-        authorized: true,
+        revealId: "reveal-1",
+        auditId: "audit-1",
       }),
     ).toEqual({ accountId: account.id, caseReason: "case-1" });
   });

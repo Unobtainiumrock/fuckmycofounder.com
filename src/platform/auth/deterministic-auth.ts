@@ -1,12 +1,13 @@
 import "server-only";
 
 import {
+  authenticateProtectedIntent,
   completeAuthentication,
   type AuthenticationProvider,
   type AuthenticationResult,
   type ProtectedIntent,
   type ProviderAvailability,
-} from "../../modules/identity-safety";
+} from "../../modules/identity-safety/server";
 
 interface DeterministicMethod {
   readonly availability: ProviderAvailability;
@@ -28,22 +29,30 @@ export function createDeterministicAuthenticationAdapter(
 } {
   return {
     authenticate(input): Promise<AuthenticationResult> {
-      const method = configuration[input.provider];
-      const availability = method?.availability ?? "disabled";
-      return Promise.resolve(
-        completeAuthentication(
-          { provider: input.provider, availability, intent: input.intent },
-          {
-            valid:
-              availability === "available" &&
-              input.proof === method?.validProof,
-            ...(availability === "available" &&
-            input.proof === method?.validProof
-              ? { providerSubject: `${input.provider}:deterministic-subject` }
-              : {}),
-          },
-        ),
-      );
+      return authenticateProtectedIntent(input, (protectedInput) => {
+        const method = configuration[protectedInput.provider];
+        const availability = method?.availability ?? "disabled";
+        return Promise.resolve(
+          completeAuthentication(
+            {
+              provider: protectedInput.provider,
+              availability,
+              intent: protectedInput.intent,
+            },
+            {
+              valid:
+                availability === "available" &&
+                protectedInput.proof === method?.validProof,
+              ...(availability === "available" &&
+              protectedInput.proof === method?.validProof
+                ? {
+                    providerSubject: `${protectedInput.provider}:deterministic-subject`,
+                  }
+                : {}),
+            },
+          ),
+        );
+      });
     },
   };
 }

@@ -7,6 +7,10 @@ import type {
   RestrictedReportRecord,
   ReportReason,
 } from "./model";
+import {
+  matchesAuthorizedDurableCommand,
+  type AuthorizedDurableCommand,
+} from "./policy";
 
 export function blockApplies(input: {
   readonly viewerAccountId?: string;
@@ -39,11 +43,6 @@ type ReportIntakeResult =
         readonly state: ModerationCaseState;
         readonly queue: "ordinary" | "urgent";
       };
-      readonly restricted: {
-        readonly kind: "restricted-report-intake";
-        readonly report: RestrictedReportRecord;
-        readonly moderationCase: RestrictedModerationCaseRecord;
-      };
       readonly emergencyGuidance?: string;
     }
   | { readonly kind: "authentication-required" }
@@ -63,7 +62,6 @@ export function intakeReport(input: {
   readonly evidenceReferences: readonly string[];
   readonly createdAt: Date;
   readonly existingCase?: RestrictedModerationCaseRecord;
-  readonly restrictedProjectionAuthorized: boolean;
 }): ReportIntakeResult {
   if (!input.reporterAccount || input.reporterAccount.state !== "active") {
     return { kind: "authentication-required" };
@@ -71,13 +69,9 @@ export function intakeReport(input: {
   if (input.existingCase?.state === "closed") {
     return { kind: "case-closed", retryable: false };
   }
-  if (!input.restrictedProjectionAuthorized) {
-    return { kind: "authentication-required" };
-  }
   if (!input.intakeAvailable) return { kind: "unavailable", retryable: true };
   if (!input.targetAvailable)
     return { kind: "target-unavailable", supportPath: true };
-  const report = buildReport(input, input.reporterAccount.id);
   const moderationCase = buildModerationCase(input);
   return {
     kind: "accepted",
@@ -86,13 +80,44 @@ export function intakeReport(input: {
       state: moderationCase.state,
       queue: moderationCase.queue,
     },
-    restricted: { kind: "restricted-report-intake", report, moderationCase },
     ...(moderationCase.queue === "urgent"
       ? {
           emergencyGuidance:
             "If anyone is in immediate danger, contact local emergency services.",
         }
       : {}),
+  };
+}
+
+interface RestrictedReportIntake {
+  readonly kind: "restricted-report-intake";
+  readonly report: RestrictedReportRecord;
+  readonly moderationCase: RestrictedModerationCaseRecord;
+}
+
+export function prepareRestrictedReportIntake(input: {
+  readonly authorization: AuthorizedDurableCommand;
+  readonly request: Parameters<typeof intakeReport>[0];
+}): RestrictedReportIntake | null {
+  const accountId = input.request.reporterAccount?.id;
+  if (
+    !accountId ||
+    !matchesAuthorizedDurableCommand(input.authorization, {
+      actorId: accountId,
+      action: "report-create",
+      capability: "trust-safety.report",
+      targetKind: "report",
+      targetId: input.request.id,
+    })
+  ) {
+    return null;
+  }
+  const result = intakeReport(input.request);
+  if (result.kind !== "accepted") return null;
+  return {
+    kind: "restricted-report-intake",
+    report: buildReport(input.request, accountId),
+    moderationCase: buildModerationCase(input.request),
   };
 }
 

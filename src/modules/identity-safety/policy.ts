@@ -1,12 +1,35 @@
 import type {
   AuditEvent,
-  AuthorizedDurableCommand,
   PolicyContext,
   PolicyOutcome,
   StaffRole,
   RestrictedField,
 } from "./model";
 import { capabilitiesFor } from "./accounts";
+
+declare const authorizedDurableCommandBrand: unique symbol;
+
+export interface AuthorizedDurableCommand {
+  readonly [authorizedDurableCommandBrand]: true;
+  readonly kind: "authorized-durable-command";
+  readonly decisionId: string;
+  readonly actorId: string;
+  readonly action: string;
+  readonly capability: string;
+  readonly targetKind: string;
+  readonly targetId: string;
+  readonly policyVersion: string;
+}
+
+const issuedDurableCommands = new WeakSet<object>();
+
+function issueDurableCommand(
+  input: Omit<AuthorizedDurableCommand, typeof authorizedDurableCommandBrand>,
+): AuthorizedDurableCommand {
+  const authorization = Object.freeze(input) as AuthorizedDurableCommand;
+  issuedDurableCommands.add(authorization);
+  return authorization;
+}
 
 export function evaluatePolicy(context: PolicyContext): PolicyOutcome {
   if (!context.policyAvailable) return { kind: "unavailable", retryable: true };
@@ -32,6 +55,8 @@ export function authorizeDurableCommand(input: {
   readonly context: PolicyContext;
   readonly decisionId: string;
   readonly capability: string;
+  readonly targetKind: string;
+  readonly targetId: string;
 }):
   | AuthorizedDurableCommand
   | Exclude<PolicyOutcome, { readonly kind: "allow" }> {
@@ -40,13 +65,58 @@ export function authorizeDurableCommand(input: {
   if (!input.context.account) {
     return { kind: "deny", code: "action-not-available" };
   }
-  return {
+  return issueDurableCommand({
     kind: "authorized-durable-command",
     decisionId: input.decisionId,
     actorId: input.context.account.id,
+    action: input.context.action,
     capability: input.capability,
+    targetKind: input.targetKind,
+    targetId: input.targetId,
     policyVersion: decision.policyVersion,
-  };
+  });
+}
+
+export function authorizeAuthenticationProof(input: {
+  readonly decisionId: string;
+  readonly accountId: string;
+  readonly providerProofVerified: boolean;
+}):
+  | AuthorizedDurableCommand
+  | { readonly kind: "deny"; readonly code: "invalid-proof" } {
+  if (!input.providerProofVerified)
+    return { kind: "deny", code: "invalid-proof" };
+  return issueDurableCommand({
+    kind: "authorized-durable-command",
+    decisionId: input.decisionId,
+    actorId: input.accountId,
+    action: "account-authenticate",
+    capability: "account.authenticate",
+    targetKind: "account",
+    targetId: input.accountId,
+    policyVersion: "identity-safety-v1",
+  });
+}
+
+export function matchesAuthorizedDurableCommand(
+  decision: AuthorizedDurableCommand,
+  expected: {
+    readonly actorId: string;
+    readonly action: string;
+    readonly capability: string;
+    readonly targetKind: string;
+    readonly targetId: string;
+  },
+): boolean {
+  return (
+    issuedDurableCommands.has(decision) &&
+    decision.actorId === expected.actorId &&
+    decision.action === expected.action &&
+    decision.capability === expected.capability &&
+    decision.targetKind === expected.targetKind &&
+    decision.targetId === expected.targetId &&
+    decision.policyVersion === "identity-safety-v1"
+  );
 }
 
 export interface ProtectedActionTransaction {

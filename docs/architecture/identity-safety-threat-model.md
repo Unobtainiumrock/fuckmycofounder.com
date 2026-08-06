@@ -11,8 +11,10 @@ Report, Moderation Case, Enforcement Action, Appeal, Audit Event, and retention
 transitions. Its interface returns named public, viewer-specific, staff, or
 restricted projections; callers never redact persistence records themselves.
 The route adapter validates untrusted input once. Authentication and PostgreSQL
-adapters are server-only. A durable command evaluates policy before opening one
-transaction, then writes its state and required audit event atomically.
+adapters are server-only. A durable command must receive an opaque authorization
+capability bound to its actor, action, capability, and target before opening one
+transaction. It then locks and revalidates canonical state before writing its
+state and required audit event atomically.
 
 Private assets are authentication identifiers, verified contacts, recovery
 state, raw claim evidence, reporter identity, anonymous-author linkage, block
@@ -29,13 +31,21 @@ direction, risk signals, legal holds, and restricted evidence references.
 | Hidden block disclosure | Symmetric safe denial and no direction in projections or errors | Later capability-specific read/write integration |
 | Report brigading or retaliation | Duplicate-safe intake, no automatic visibility/rank effect, auditable abuse reason codes | Production rate storage and calibrated thresholds |
 | Moderator overreach | Least-privilege field matrix, case reason plus approval, separate case/enforcement/appeal states, reviewer separation | Staff identity provider, role provisioning, periodic access review |
-| Audit alteration | Database trigger rejects update/delete; mutations append a denied-attempt event | Backup and database administrator controls |
-| Over-retention | Declared per-class expiry, appeal/legal-hold scoping, deletion receipts without payload | Counsel-approved periods, live jobs, backup-provider deletion proof |
+| Audit alteration | Database trigger rejects update/delete; forbidden mutation and the denied-attempt audit share one owned database operation; restricted reveal is usable only through its audited projection | Backup and database administrator controls |
+| Over-retention | Expiring restricted audit evidence, per-class expiry, appeal/final-resolution anchors, authorized scoped legal holds and release, deletion receipts without payload | Counsel-approved periods, live jobs, backup-provider deletion proof; explicit authority is still required before any core audit-history retention mechanism |
 | Provider outage or policy outage | Explicit disabled/unavailable states, protected intent preservation, fail closed | Selected provider failover and deployed retry acceptance |
 
 Ordinary logs may contain a correlation identifier, operation name, coarse
 outcome, and policy version. They must not contain proof, tokens, contacts,
 anonymous linkage, reporter identity, block direction, or request bodies.
+
+Core audit history is intentionally permanent and minimal in the repository
+implementation. It is never updated or deleted. Raw or otherwise restricted
+audit evidence lives in a separate expiring payload table and may be preserved
+only by a scoped legal hold with recorded authority and reason. A future change
+to core-history retention requires a narrowly privileged database procedure,
+an execution role unable to rewrite unrelated history, counsel-approved time
+periods, and separate end-user authority; none is inferred here.
 
 ## Security and privacy stop rules
 

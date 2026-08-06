@@ -8,7 +8,7 @@ Evidence: [`identity-safety-walking-skeleton.test.ts`](../../../tests/unit/ident
 
 ## 2. Account authentication and lifecycle
 
-Evidence: [`accounts.test.ts`](../../../tests/unit/accounts.test.ts), [`identity-safety-commands.ts`](../../../src/platform/persistence/identity-safety-commands.ts), and the Account boundary browser test.
+Evidence: [`accounts.test.ts`](../../../tests/unit/accounts.test.ts), [`identity-safety-account-commands.ts`](../../../src/platform/persistence/identity-safety-account-commands.ts), [`postgres-identity-safety.test.ts`](../../../tests/integration/postgres-identity-safety.test.ts), and the Account boundary browser test.
 
 - [x] 2.1 Add Google, Apple, and passwordless email-link authentication adapters with protected-intent return and expired/failure handling (test: each success and failure path preserves the pending intent).
 - [x] 2.2 Add explicit authentication-method linking, recent-reauthentication checks, and reviewed recovery without automatic email-match merging (test: takeover and duplicate-account cases).
@@ -17,7 +17,7 @@ Evidence: [`accounts.test.ts`](../../../tests/unit/accounts.test.ts), [`identity
 
 ## 3. Public Bylines and attribution
 
-Evidence: [`public-bylines.test.ts`](../../../tests/unit/public-bylines.test.ts) exercises the named response, metadata, log, event, export, error, and notification projection functions.
+Evidence: [`public-bylines.test.ts`](../../../tests/unit/public-bylines.test.ts), [`public-identity-boundary.test.ts`](../../../tests/contracts/public-identity-boundary.test.ts), and [`identity-safety-public-commands.ts`](../../../src/platform/persistence/identity-safety-public-commands.ts) exercise the public projection seam and durable commands.
 
 - [x] 3.1 Add on-demand Public Byline creation and editing with required display name, optional photo, reserved-label and impersonation checks, and no Profile side effect (test: named-action gate).
 - [x] 3.2 Add explicit claimed-Profile linking and automatic removal of the public claimed marker when the claim is no longer verified (test: claim transition projection).
@@ -25,7 +25,7 @@ Evidence: [`public-bylines.test.ts`](../../../tests/unit/public-bylines.test.ts)
 
 ## 4. Profile Claim foundation
 
-Evidence: [`profile-claims.test.ts`](../../../tests/unit/profile-claims.test.ts), migrations `0000000000001` and `0000000000003`, and the durable command integration case.
+Evidence: [`profile-claims.test.ts`](../../../tests/unit/profile-claims.test.ts), migrations `0000000000001` and `0000000000003`, [`identity-safety-appeals.ts`](../../../src/platform/persistence/identity-safety-appeals.ts), and the durable command integration cases.
 
 - [x] 4.1 Implement pending, verified, rejected, and revoked Profile Claim transitions with exclusive active ownership and recent reauthentication (test: transition and uniqueness matrix).
 - [x] 4.2 Add private evidence intake for authoritative-control proof or human review, derived public claimed state, evidence expiry, and safe failure handling (test: name/email/photo alone cannot verify a claim).
@@ -33,7 +33,7 @@ Evidence: [`profile-claims.test.ts`](../../../tests/unit/profile-claims.test.ts)
 
 ## 5. Trust and safety operations
 
-Evidence: [`trust-safety.test.ts`](../../../tests/unit/trust-safety.test.ts), durable PostgreSQL command integration, and the moderator runbook.
+Evidence: [`trust-safety.test.ts`](../../../tests/unit/trust-safety.test.ts), [`identity-safety-moderation-commands.ts`](../../../src/platform/persistence/identity-safety-moderation-commands.ts), durable PostgreSQL command integration, and the moderator runbook.
 
 - [x] 5.1 Implement the centralized policy interface for protected actions using Account, block, claim, risk, and capability context (test: allow, deny, unmet-requirement, and unavailable-policy outcomes).
 - [x] 5.2 Add immediate unilateral Account blocking across direct interaction, targeted discovery, and notifications without treating it as content removal (test: signed-in, anonymous-attribution, and logged-out cases).

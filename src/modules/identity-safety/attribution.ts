@@ -77,7 +77,7 @@ export function anonymousAttribution(): AnonymousAttributionProjection {
   return { kind: "anonymous", label: "Anonymous reviewer" };
 }
 
-type PublicAttributionProjection =
+export type PublicAttributionProjection =
   | AnonymousAttributionProjection
   | PublicBylineProjection
   | { readonly kind: "withheld"; readonly code: "attribution-unavailable" };
@@ -102,66 +102,61 @@ export function projectAttribution(input: {
   );
 }
 
-type AttributionInput = Parameters<typeof projectAttribution>[0];
-
 export const publicResponseAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly attribution: PublicAttributionProjection;
-} => ({ attribution: projectAttribution(input) });
+} => ({ attribution });
 
 export const metadataAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly author: PublicAttributionProjection;
-} => ({ author: projectAttribution(input) });
+} => ({ author: attribution });
 
 export const ordinaryLogAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly outcome: "rendered" | "withheld";
 } => ({
-  outcome:
-    projectAttribution(input).kind === "withheld" ? "withheld" : "rendered",
+  outcome: attribution.kind === "withheld" ? "withheld" : "rendered",
 });
 
 export const eventAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly actor: PublicAttributionProjection;
-} => ({ actor: projectAttribution(input) });
+} => ({ actor: attribution });
 
 export const exportAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly authoredAs: PublicAttributionProjection;
-} => ({ authoredAs: projectAttribution(input) });
+} => ({ authoredAs: attribution });
 
 export const errorAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly code: "attribution-unavailable" | "none";
 } => ({
-  code:
-    projectAttribution(input).kind === "withheld"
-      ? "attribution-unavailable"
-      : "none",
+  code: attribution.kind === "withheld" ? "attribution-unavailable" : "none",
 });
 
 export const notificationAttribution = (
-  input: AttributionInput,
+  attribution: PublicAttributionProjection,
 ): {
   readonly actor: PublicAttributionProjection;
-} => ({ actor: projectAttribution(input) });
+} => ({ actor: attribution });
 
-export function restrictedAttribution(input: {
+export function restrictedAttributionFromAuditedRecord(input: {
   readonly accountId: string;
   readonly caseReason: string;
-  readonly authorized: boolean;
-}): RestrictedAttributionProjection | null {
-  return input.authorized
-    ? { accountId: input.accountId, caseReason: input.caseReason }
-    : null;
+  readonly revealId: string;
+  readonly auditId: string;
+}): RestrictedAttributionProjection {
+  if (!input.revealId || !input.auditId)
+    throw new Error("Restricted attribution requires an audited reveal record");
+  return { accountId: input.accountId, caseReason: input.caseReason };
 }
 
 export function linkVerifiedClaim(

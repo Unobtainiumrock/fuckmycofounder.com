@@ -209,14 +209,6 @@ export interface AuditEvent {
   readonly restrictedEvidenceReferences: readonly string[];
 }
 
-export interface AuthorizedDurableCommand {
-  readonly kind: "authorized-durable-command";
-  readonly decisionId: string;
-  readonly actorId: string;
-  readonly capability: string;
-  readonly policyVersion: string;
-}
-
 export type StaffRole = "support" | "moderator" | "identity-reviewer" | "legal";
 export type RestrictedField =
   | "authentication-data"
@@ -234,6 +226,10 @@ export interface RetainedRecord {
     | "recovery"
     | "claim-evidence"
     | "anonymous-linkage"
+    | "report-evidence"
+    | "moderation-evidence"
+    | "security-log"
+    | "audit-evidence"
     | "safety-audit"
     | "backup";
   readonly expiresAt: Date;

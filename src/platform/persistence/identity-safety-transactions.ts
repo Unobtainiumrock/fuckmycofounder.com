@@ -3,7 +3,7 @@ import "server-only";
 import type {
   AuditEvent,
   ProtectedActionTransactionOwner,
-} from "../../modules/identity-safety";
+} from "../../modules/identity-safety/server";
 import type { TransactionRunner } from "./transaction-runner";
 
 export function createPostgresProtectedActionTransactions(

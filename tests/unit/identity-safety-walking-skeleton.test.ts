@@ -6,7 +6,7 @@ import {
   executeProtectedAction,
   publicBylineProjection,
   type Account,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 import { composeNetworkContentSecurityPolicy } from "@/src/platform/http/security-headers";
 import { findProjectionLeaks } from "@/tests/support/noninterference";
 

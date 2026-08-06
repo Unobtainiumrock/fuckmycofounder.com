@@ -10,7 +10,7 @@ import {
   type Account,
   type ProfileClaim,
   type PublicByline,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 import { findProjectionLeaks } from "@/tests/support/noninterference";
 
 const now = new Date("2026-08-05T12:00:00.000Z");

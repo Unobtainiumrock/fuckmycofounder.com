@@ -8,13 +8,15 @@ import {
   blockApplies,
   evaluatePolicy,
   intakeReport,
+  matchesAuthorizedDurableCommand,
+  prepareRestrictedReportIntake,
   reportStatusProjection,
   transitionModerationCase,
   type Account,
   type EnforcementOutcome,
   type RestrictedModerationCaseRecord,
   type ReportReason,
-} from "@/src/modules/identity-safety";
+} from "@/src/modules/identity-safety/server";
 import { findProjectionLeaks } from "@/tests/support/noninterference";
 
 const now = new Date("2026-08-05T12:00:00.000Z");
@@ -47,19 +49,51 @@ describe("centralized policy", () => {
         context: base,
         decisionId: "decision-a",
         capability: "report",
+        targetKind: "content",
+        targetId: "content-a",
       }),
     ).toMatchObject({
       kind: "authorized-durable-command",
       actorId: "account-a",
       policyVersion: "identity-safety-v1",
+      targetId: "content-a",
     });
     expect(
       authorizeDurableCommand({
         context: { ...base, account: null },
         decisionId: "decision-b",
         capability: "report",
+        targetKind: "content",
+        targetId: "content-a",
       }),
     ).toEqual({ kind: "deny", code: "action-not-available" });
+    const issued = authorizeDurableCommand({
+      context: base,
+      decisionId: "decision-c",
+      capability: "report",
+      targetKind: "content",
+      targetId: "content-a",
+    });
+    expect(issued.kind).toBe("authorized-durable-command");
+    if (issued.kind !== "authorized-durable-command") return;
+    expect(
+      matchesAuthorizedDurableCommand(issued, {
+        actorId: account.id,
+        action: "interact",
+        capability: "report",
+        targetKind: "content",
+        targetId: "content-a",
+      }),
+    ).toBe(true);
+    expect(
+      matchesAuthorizedDurableCommand(issued, {
+        actorId: account.id,
+        action: "interact",
+        capability: "enforce",
+        targetKind: "content",
+        targetId: "content-a",
+      }),
+    ).toBe(false);
   });
 
   it("returns allow, safe deny, explicit unmet requirement, and fail-closed unavailable", () => {
@@ -141,38 +175,59 @@ describe("reports, moderation, enforcement, and appeals", () => {
     reason: "harassment" as const,
     evidenceReferences: ["restricted-evidence"],
     createdAt: now,
-    restrictedProjectionAuthorized: true,
   };
+  const reportAuthorization = authorizeDurableCommand({
+    context: {
+      account,
+      action: "report-create",
+      blocked: false,
+      capabilityEligible: true,
+      policyAvailable: true,
+      recentReauthentication: true,
+      riskApproved: true,
+      sensitive: false,
+    },
+    decisionId: "report-decision",
+    capability: "trust-safety.report",
+    targetKind: "report",
+    targetId: reportInput.id,
+  });
+  if (reportAuthorization.kind !== "authorized-durable-command")
+    throw new Error("report fixture unauthorized");
 
   it("requires an Account, deduplicates intake, and keeps reporter/evidence confidential", () => {
     expect(intakeReport({ ...reportInput, reporterAccount: null })).toEqual({
       kind: "authentication-required",
     });
     const first = intakeReport(reportInput);
-    expect(first).toMatchObject({
-      kind: "accepted",
-      restricted: {
-        moderationCase: { state: "received", reportIds: ["report-secret"] },
-      },
-    });
+    expect(first).toMatchObject({ kind: "accepted" });
+    expect(first).not.toHaveProperty("restricted");
     if (first.kind !== "accepted") throw new Error("report not accepted");
+    const restricted = prepareRestrictedReportIntake({
+      authorization: reportAuthorization,
+      request: reportInput,
+    });
+    expect(restricted).toMatchObject({
+      moderationCase: { state: "received", reportIds: ["report-secret"] },
+    });
+    if (!restricted) throw new Error("restricted intake unavailable");
     const duplicate = intakeReport({
       ...reportInput,
-      existingCase: first.restricted.moderationCase,
+      existingCase: restricted.moderationCase,
     });
     expect(duplicate).toMatchObject({
-      restricted: { moderationCase: { reportIds: ["report-secret"] } },
+      receipt: { caseId: reportInput.caseId },
     });
     expect(
       intakeReport({
         ...reportInput,
         existingCase: transitionModerationCase(
-          first.restricted.moderationCase,
+          restricted.moderationCase,
           "closed",
         )!,
       }),
     ).toEqual({ kind: "case-closed", retryable: false });
-    const status = reportStatusProjection(first.restricted.moderationCase);
+    const status = reportStatusProjection(restricted.moderationCase);
     expect(
       findProjectionLeaks(status, {
         forbiddenKeys: ["reporterAccountId", "evidenceReferences"],
