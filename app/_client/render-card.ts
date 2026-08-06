@@ -79,7 +79,7 @@ function drawSections(
   avatar?: HTMLImageElement,
 ): void {
   const left = 72;
-  const maximumWidth = width - 144 - (avatar ? 248 : 0);
+  const maximumWidth = width - 144;
   const sections: ReadonlyArray<
     readonly [string, string, number, number, number]
   > = [
@@ -91,6 +91,7 @@ function drawSections(
   if (avatar) drawAvatar(context, avatar);
   let y = 305;
   for (const [heading, text, size, lineHeight, maximumLines] of sections) {
+    const sectionWidth = avatar && y < 446 ? maximumWidth - 248 : maximumWidth;
     drawLabel(context, heading, left, y);
     y += 48;
     context.fillStyle = colors.paper;
@@ -99,14 +100,14 @@ function drawSections(
       drawWrapped(context, text, {
         lineHeight,
         maximumLines,
-        maximumWidth,
+        maximumWidth: sectionWidth,
         x: left,
         y,
       }) + 38;
     context.strokeStyle = "rgba(244,237,223,.16)";
     context.beginPath();
     context.moveTo(left, y - 15);
-    context.lineTo(width - left, y - 15);
+    context.lineTo(left + sectionWidth, y - 15);
     context.stroke();
   }
   const footerTop = Math.max(y + 20, 1125);
@@ -134,9 +135,22 @@ function drawAvatar(
   const size = 200;
   const x = width - 72 - size - 24;
   const y = 172;
+  const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+  const sourceX = (image.naturalWidth - sourceSize) / 2;
+  const sourceY = (image.naturalHeight - sourceSize) / 2;
   context.fillStyle = colors.paper;
   context.fillRect(x, y, size + 24, size + 62);
-  context.drawImage(image, x + 12, y + 12, size, size);
+  context.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceSize,
+    sourceSize,
+    x + 12,
+    y + 12,
+    size,
+    size,
+  );
   context.fillStyle = colors.ink;
   context.font = "900 22px monospace";
   context.textAlign = "center";
