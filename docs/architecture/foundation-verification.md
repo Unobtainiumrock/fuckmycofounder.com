@@ -98,17 +98,20 @@ the browser as a 1200×1500 PNG. The regenerated Case File snapshot was visually
 reviewed after image decode; it shows the intended local mugshot, not a broken
 placeholder. The strict snapshot reran twice consecutively before acceptance.
 
-The final clean checkout at `955b479` used frozen dependencies, local Node
-24.18.1, PostgreSQL 17.10-alpine on `fmcf_test` at port 54329, and the pinned
-Node 24.18.0 container image. It passed formatting, lint, architecture (17
-contracts), unused exports, typecheck, Next build, 22 legacy plus 79 Vitest
-tests, four Postgres tests, both four-assertion production HTTP configurations,
-five Playwright journeys, file-size policy, strict OpenSpec (11/0), container
-smoke, and legacy `build`/`test`. The download assertion now checks selected
-fixture-red pixels in the decoded avatar region. Independent standards and Spec
-reviews of `bb04411..480fe10` found no high- or medium-severity findings; tasks
-1.3, 7.1, and 7.2 are closed on that evidence. No provider, deployment, secret,
-DNS, or live data mutation occurred during this corrective pass.
+The final executable code-and-test proof commit is `480fe10`. Its clean checkout
+used frozen dependencies, local Node 24.18.1, PostgreSQL 17.10-alpine on
+`fmcf_test` at port 54329, and the pinned Node 24.18.0 container image. It
+passed formatting, lint, architecture (17 contracts), unused exports, typecheck,
+Next build, 22 legacy plus 79 Vitest tests, four Postgres tests, both
+four-assertion production HTTP configurations, five Playwright journeys,
+file-size policy, strict OpenSpec (11/0), container smoke, and legacy
+`build`/`test`. The download assertion checks selected fixture-red pixels in the
+decoded avatar region. Independent standards and Spec reviews of
+`bb04411..480fe10` found no high- or medium-severity findings. Every later
+branch commit is evidence-only: `bd0d644` closed tasks 1.3, 7.1, and 7.2 on that
+proof, and this correction only reconciles the verification record. No provider,
+deployment, secret, DNS, or live data mutation occurred during this corrective
+pass.
 
 ## Explicitly deferred evidence
 
@@ -121,26 +124,26 @@ that system. Those external checks require separate authority.
 
 ## Clean-checkout gate record
 
-The final clean checkout uses the downloaded pinned Node.js 24.18.0 runtime,
-Corepack pnpm 9.15.4, PostgreSQL 17.10-alpine, and the exact `fmcf_test`
-database/user identity on local port 54329. The default 5432 host port belonged
-to an unrelated local service, so the disposable container was recreated on
-54329 before connecting; the guard accepted the URL and no non-test identity was
-contacted.
+The final clean checkout used local Node.js 24.18.1 with Corepack pnpm 9.15.4,
+PostgreSQL 17.10-alpine, and the exact `fmcf_test` database/user identity on
+local port 54329. The container smoke test separately used the repository-pinned
+Node.js 24.18.0 image. The default 5432 host port belonged to an unrelated local
+service, so the disposable container was recreated on 54329 before connecting;
+the guard accepted the URL and no non-test identity was contacted.
 
-| Command                   | Result                                           |
-| ------------------------- | ------------------------------------------------ |
-| `pnpm format:check`       | pass                                             |
-| `pnpm lint`               | pass                                             |
-| `pnpm check:architecture` | pass (17 contracts)                              |
-| `pnpm check:unused`       | pass                                             |
-| `pnpm typecheck`          | pass                                             |
-| `pnpm build:app`          | pass                                             |
-| `pnpm test:all`           | pass (22 legacy + 80 Vitest assertions)          |
-| `pnpm test:integration`   | pass (4 Postgres + 4 production HTTP assertions) |
-| `pnpm test:e2e`           | pass (3 production-built browser journeys)       |
-| `pnpm check:file-sizes`   | pass                                             |
-| `pnpm openspec:validate`  | pass                                             |
-| `pnpm test:container`     | pass                                             |
-| `pnpm build`              | pass (legacy static fingerprint build)           |
-| `pnpm test`               | pass (22 legacy assertions)                      |
+| Command                   | Result                                          |
+| ------------------------- | ----------------------------------------------- |
+| `pnpm format:check`       | pass                                            |
+| `pnpm lint`               | pass                                            |
+| `pnpm check:architecture` | pass (17 contracts)                             |
+| `pnpm check:unused`       | pass                                            |
+| `pnpm typecheck`          | pass                                            |
+| `pnpm build:app`          | pass                                            |
+| `pnpm test:all`           | pass (22 legacy + 79 Vitest tests)              |
+| `pnpm test:integration`   | pass (4 Postgres + 2 × 4 production HTTP tests) |
+| `pnpm test:e2e`           | pass (5 production-built browser journeys)      |
+| `pnpm check:file-sizes`   | pass                                            |
+| `pnpm openspec:validate`  | pass                                            |
+| `pnpm test:container`     | pass                                            |
+| `pnpm build`              | pass (legacy static fingerprint build)          |
+| `pnpm test`               | pass (22 legacy assertions)                     |
