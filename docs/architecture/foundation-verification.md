@@ -1,7 +1,8 @@
 # Foundation verification record
 
-Status: the repository foundation was verified on 2026-08-05. Reconciliation
-with later static-production work reopened acquisition parity and final review.
+Status: the repository foundation was reverified on 2026-08-07 after
+reconciliation with later static-production work and a corrective acquisition
+parity review.
 
 ## Pinned toolchain
 
@@ -98,9 +99,9 @@ the browser as a 1200×1500 PNG. The regenerated Case File snapshot was visually
 reviewed after image decode; it shows the intended local mugshot, not a broken
 placeholder. The strict snapshot reran twice consecutively before acceptance.
 
-The final executable code-and-test proof commit is `480fe10`. Its clean checkout
-used frozen dependencies, local Node 24.18.1, PostgreSQL 17.10-alpine on
-`fmcf_test` at port 54329, and the pinned Node 24.18.0 container image. It
+The corrective executable code-and-test proof commit was `480fe10`. Its clean
+checkout used frozen dependencies, local Node 24.18.1, PostgreSQL 17.10-alpine
+on `fmcf_test` at port 54329, and the pinned Node 24.18.0 container image. It
 passed formatting, lint, architecture (17 contracts), unused exports, typecheck,
 Next build, 22 legacy plus 79 Vitest tests, four Postgres tests, both
 four-assertion production HTTP configurations, five Playwright journeys,
@@ -108,10 +109,35 @@ file-size policy, strict OpenSpec (11/0), container smoke, and legacy
 `build`/`test`. The download assertion checks selected fixture-red pixels in the
 decoded avatar region. Independent standards and Spec reviews of
 `bb04411..480fe10` found no high- or medium-severity findings. Every later
-branch commit is evidence-only: `bd0d644` closed tasks 1.3, 7.1, and 7.2 on that
-proof, and this correction only reconciles the verification record. No provider,
-deployment, secret, DNS, or live data mutation occurred during this corrective
-pass.
+branch commit through `e602517` is evidence-only: `bd0d644` closed tasks 1.3,
+7.1, and 7.2 on that proof, and `e602517` reconciled the verification record.
+
+## Post-closeout regression correction
+
+A fresh review after `e602517` found one remaining parity regression: unlike the
+static renderer, the Next renderer rejected the entire card operation when an
+accepted avatar URL later failed to load. Commit `2cd3697` restores the static
+fallback by omitting only the failed avatar and continuing to render the card. A
+public renderer-seam regression test proves the fallback without mocking the
+caller, and the same behavior protects both download and share because they use
+that renderer.
+
+The Playwright landing snapshot also depended on the wall-clock-derived case
+ticker. Its journey now fixes browser time at `2026-08-06T12:00:00Z`; the
+accepted screenshot was not regenerated, and the targeted screenshot passed
+twice consecutively before the full browser suite passed. This is test-harness
+determinism, not a product behavior change.
+
+The final executable code-and-test proof commit is `2cd3697`. Its clean detached
+checkout used frozen dependencies, local Node 24.18.1, PostgreSQL 17.10-alpine
+on `fmcf_test` at port 54329, and the pinned Node 24.18.0 container image. It
+passed formatting, lint, architecture (17 contracts), unused exports, typecheck,
+Next build, 22 legacy plus 80 Vitest tests, four Postgres tests, both
+four-assertion production HTTP configurations, five Playwright journeys,
+file-size policy, strict OpenSpec (11/0), container smoke, and legacy
+`build`/`test`. The checkout remained clean after the gate. The subsequent
+verification-record commit is evidence-only. No provider, deployment, secret,
+DNS, or live data mutation occurred during this pass.
 
 ## Explicitly deferred evidence
 
@@ -139,7 +165,7 @@ the guard accepted the URL and no non-test identity was contacted.
 | `pnpm check:unused`       | pass                                            |
 | `pnpm typecheck`          | pass                                            |
 | `pnpm build:app`          | pass                                            |
-| `pnpm test:all`           | pass (22 legacy + 79 Vitest tests)              |
+| `pnpm test:all`           | pass (22 legacy + 80 Vitest tests)              |
 | `pnpm test:integration`   | pass (4 Postgres + 2 × 4 production HTTP tests) |
 | `pnpm test:e2e`           | pass (5 production-built browser journeys)      |
 | `pnpm check:file-sizes`   | pass                                            |
