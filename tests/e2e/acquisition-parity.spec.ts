@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 test("landing and Cooked Quiz preserve the approved Caseboard experience", async ({
   page,
 }) => {
+  await page.clock.setFixedTime(new Date("2026-08-06T12:00:00Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 

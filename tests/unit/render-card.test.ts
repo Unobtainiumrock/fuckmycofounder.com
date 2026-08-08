@@ -47,8 +47,9 @@ describe("report card renderer", () => {
         onerror: (() => void) | undefined;
         onload: (() => void) | undefined;
 
-        set src(_: string) {
-          this.onload?.();
+        set src(value: string) {
+          if (value === "blob:broken") this.onerror?.();
+          else this.onload?.();
         }
       },
     );
@@ -58,5 +59,11 @@ describe("report card renderer", () => {
     await expect(
       renderCardBlob(report, "blob:subject"),
     ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it("returns a card without a mugshot when avatar loading fails", async () => {
+    await expect(renderCardBlob(report, "blob:broken")).resolves.toBeInstanceOf(
+      Blob,
+    );
   });
 });

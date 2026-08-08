@@ -19,7 +19,9 @@ export async function renderCardBlob(
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Card rendering is unavailable.");
 
-  const avatar = avatarUrl ? await loadImage(avatarUrl) : undefined;
+  const avatar = avatarUrl
+    ? await loadImage(avatarUrl).catch(() => undefined)
+    : undefined;
   drawFrame(context, report);
   drawSections(context, report, avatar);
 
