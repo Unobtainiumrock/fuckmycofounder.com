@@ -1,0 +1,46 @@
+schema: spec-driven
+
+context: |
+  The repository currently contains a dependency-free static GitHub Pages site:
+  hand-written HTML/CSS, vanilla JavaScript modules, no build step, and tests via
+  `node --test tests/*.test.js`. Its current CSP is `connect-src 'none'` and its
+  share state travels in URL fragments. Those are current implementation facts,
+  not permanent constraints on the planned authenticated network; any change
+  that introduces backend or network behavior must specify the new boundary.
+
+  The current product goal is a Profile-first social and professional reputation
+  network for founders, investors, VCs, operators, and other startup people.
+  Profiles contain only name and photo as authored identity fields and may exist
+  without an owning Account. Reviews are first-hand, relationship-grounded, and
+  may be named or publicly anonymous. Posts are named. Reviews and Posts are
+  distinct Feed objects. Comments, Review Votes, weekly Review Awards, Share
+  Clips, Profile claims, message requests, and a later mutually visible Open To
+  mode are part of the planned product.
+
+  Authoritative discovery and vocabulary sources:
+  - docs/product-definition.md — current product decisions, readiness, and open
+    questions.
+  - CONTEXT.md — canonical domain glossary; use its terms exactly.
+  - DESIGN.md — visual and interaction system, including the Caseboard layout.
+  - docs/adr/0001 — Cooked Quiz diagnoses partnerships, never people.
+
+  docs/features.md is historical exploration and contains superseded product,
+  consent, and sequencing decisions. It is not authoritative when it conflicts
+  with docs/product-definition.md.
+
+  Before any network feature implementation, the proposed Order 0 change
+  `establish-application-engineering-foundation` must be reviewed, approved, and
+  implemented. It owns shared runtime, module, persistence, privacy-projection,
+  verification, and CI rules; later changes must reuse those seams rather than
+  inventing local alternatives.
+
+rules:
+  proposal:
+    - Keep proposals under 500 words
+  tasks:
+    - "Order tasks as a tracer bullet: a thin end-to-end slice first, depth after"
+  specs:
+    - Use one stable noun capability per spec folder
+    - Every requirement must use SHALL and include at least one WHEN/THEN scenario
+    - State privacy, moderation, empty, error, and abuse behavior where relevant
+    - Do not copy unresolved questions into requirements; resolve them in review

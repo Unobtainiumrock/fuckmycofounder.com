@@ -14,7 +14,7 @@ import {
   moduleSpecifiers,
   relativeSpecifier,
   resolveSpecifier,
-  rewriteModuleSpecifiers
+  rewriteModuleSpecifiers,
 } from "./fingerprint.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -23,20 +23,44 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 // fingerprinted alongside the client bundle.
 const SCRIPT_DIRS = ["assets/js", "shared"];
 const STYLE_DIR = "assets/css";
-const COPY_FILES = ["index.html", "board/index.html", "404.html", "CNAME", "robots.txt", "sitemap.xml", "_headers"];
+const COPY_FILES = [
+  "index.html",
+  "board/index.html",
+  "404.html",
+  "CNAME",
+  "robots.txt",
+  "sitemap.xml",
+  "_headers",
+];
 const COPY_DIRS = ["assets/images", "assets/icons"];
 
-const HTML_ASSET_REFERENCE = /\/(assets\/(?:js|css)\/[\w./-]+\.(?:js|css))(\?[^"'\s>]*)?/g;
+const HTML_ASSET_REFERENCE =
+  /\/(assets\/(?:js|css)\/[\w./-]+\.(?:js|css))(\?[^"'\s>]*)?/g;
 const CSS_URL_REFERENCE = /url\(\s*["']?([^"')]+)/g;
 // Inlined SVG data URIs contain their own url(#filter) references.
 const CSS_DATA_URI = /url\(\s*["']?data:[^)]*\)/g;
-const PORTABLE_URL_PREFIXES = ["http:", "https:", "//", "#", "/assets/images/", "/assets/icons/"];
+const PORTABLE_URL_PREFIXES = [
+  "http:",
+  "https:",
+  "//",
+  "#",
+  "/assets/images/",
+  "/assets/icons/",
+];
 
 async function listFiles(root, directory) {
-  const entries = await fs.readdir(path.join(root, directory), { withFileTypes: true, recursive: true });
+  const entries = await fs.readdir(path.join(root, directory), {
+    withFileTypes: true,
+    recursive: true,
+  });
   return entries
     .filter((entry) => entry.isFile())
-    .map((entry) => path.posix.join(path.relative(root, entry.parentPath).split(path.sep).join("/"), entry.name))
+    .map((entry) =>
+      path.posix.join(
+        path.relative(root, entry.parentPath).split(path.sep).join("/"),
+        entry.name,
+      ),
+    )
     .sort();
 }
 
@@ -47,14 +71,21 @@ async function writeFile(outDir, relativePath, content) {
 }
 
 function assertNoLocalUrls(relativePath, css) {
-  for (const [, reference] of css.replace(CSS_DATA_URI, "").matchAll(CSS_URL_REFERENCE)) {
-    if (PORTABLE_URL_PREFIXES.some((prefix) => reference.startsWith(prefix))) continue;
-    throw new Error(`${relativePath} references ${reference}; fingerprinted CSS cannot resolve relative urls`);
+  for (const [, reference] of css
+    .replace(CSS_DATA_URI, "")
+    .matchAll(CSS_URL_REFERENCE)) {
+    if (PORTABLE_URL_PREFIXES.some((prefix) => reference.startsWith(prefix)))
+      continue;
+    throw new Error(
+      `${relativePath} references ${reference}; fingerprinted CSS cannot resolve relative urls`,
+    );
   }
 }
 
 async function fingerprintScripts(root, outDir, manifest) {
-  const listings = await Promise.all(SCRIPT_DIRS.map((directory) => listFiles(root, directory)));
+  const listings = await Promise.all(
+    SCRIPT_DIRS.map((directory) => listFiles(root, directory)),
+  );
   const files = listings.flat().filter((file) => file.endsWith(".js"));
   const sources = new Map();
   for (const file of files) {
@@ -62,15 +93,26 @@ async function fingerprintScripts(root, outDir, manifest) {
   }
 
   const dependencies = new Map(
-    files.map((file) => [file, moduleSpecifiers(sources.get(file)).map((specifier) => resolveSpecifier(file, specifier))])
+    files.map((file) => [
+      file,
+      moduleSpecifiers(sources.get(file)).map((specifier) =>
+        resolveSpecifier(file, specifier),
+      ),
+    ]),
   );
 
   for (const file of dependencyOrder(dependencies)) {
-    const rewritten = rewriteModuleSpecifiers(sources.get(file), (specifier) => {
-      const hashed = manifest.get(resolveSpecifier(file, specifier));
-      if (!hashed) throw new Error(`${file} imports ${specifier} before it was fingerprinted`);
-      return relativeSpecifier(file, hashed);
-    });
+    const rewritten = rewriteModuleSpecifiers(
+      sources.get(file),
+      (specifier) => {
+        const hashed = manifest.get(resolveSpecifier(file, specifier));
+        if (!hashed)
+          throw new Error(
+            `${file} imports ${specifier} before it was fingerprinted`,
+          );
+        return relativeSpecifier(file, hashed);
+      },
+    );
     const hashed = fingerprint(file, hashContent(rewritten));
     manifest.set(file, hashed);
     await writeFile(outDir, hashed, rewritten);
@@ -78,7 +120,9 @@ async function fingerprintScripts(root, outDir, manifest) {
 }
 
 async function fingerprintStyles(root, outDir, manifest) {
-  const files = (await listFiles(root, STYLE_DIR)).filter((file) => file.endsWith(".css"));
+  const files = (await listFiles(root, STYLE_DIR)).filter((file) =>
+    file.endsWith(".css"),
+  );
   for (const file of files) {
     const source = await fs.readFile(path.join(root, file), "utf8");
     assertNoLocalUrls(file, source);
@@ -91,12 +135,18 @@ async function fingerprintStyles(root, outDir, manifest) {
 function rewriteHtml(relativePath, html, manifest) {
   return html.replace(HTML_ASSET_REFERENCE, (match, reference) => {
     const hashed = manifest.get(reference);
-    if (!hashed) throw new Error(`${relativePath} references ${reference}, which is not a build output`);
+    if (!hashed)
+      throw new Error(
+        `${relativePath} references ${reference}, which is not a build output`,
+      );
     return `/${hashed}`;
   });
 }
 
-export async function build({ root = ROOT, outDir = path.join(ROOT, "dist") } = {}) {
+export async function build({
+  root = ROOT,
+  outDir = path.join(ROOT, "dist"),
+} = {}) {
   await fs.rm(outDir, { recursive: true, force: true });
 
   const manifest = new Map();
@@ -104,12 +154,18 @@ export async function build({ root = ROOT, outDir = path.join(ROOT, "dist") } = 
   await fingerprintStyles(root, outDir, manifest);
 
   for (const directory of COPY_DIRS) {
-    await fs.cp(path.join(root, directory), path.join(outDir, directory), { recursive: true });
+    await fs.cp(path.join(root, directory), path.join(outDir, directory), {
+      recursive: true,
+    });
   }
 
   for (const file of COPY_FILES) {
     const content = await fs.readFile(path.join(root, file), "utf8");
-    await writeFile(outDir, file, file.endsWith(".html") ? rewriteHtml(file, content, manifest) : content);
+    await writeFile(
+      outDir,
+      file,
+      file.endsWith(".html") ? rewriteHtml(file, content, manifest) : content,
+    );
   }
 
   return manifest;

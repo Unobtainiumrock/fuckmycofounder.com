@@ -5,10 +5,14 @@ export const HASH_LENGTH = 10;
 
 // Matches static `from "./x.js"` and dynamic `import("./x.js")` specifiers,
 // tolerating a legacy `?v=` query so old sources still build.
-const SPECIFIER_PATTERN = /(\bfrom\s*"|\bimport\(\s*")(\.{1,2}\/[^"]*?\.js)(\?[^"]*?)?"/g;
+const SPECIFIER_PATTERN =
+  /(\bfrom\s*"|\bimport\(\s*")(\.{1,2}\/[^"]*?\.js)(\?[^"]*?)?"/g;
 
 export function hashContent(content) {
-  return createHash("sha256").update(content).digest("hex").slice(0, HASH_LENGTH);
+  return createHash("sha256")
+    .update(content)
+    .digest("hex")
+    .slice(0, HASH_LENGTH);
 }
 
 export function fingerprint(relativePath, hash) {
@@ -21,16 +25,24 @@ export function moduleSpecifiers(source) {
 }
 
 export function rewriteModuleSpecifiers(source, resolve) {
-  return source.replace(SPECIFIER_PATTERN, (match, prefix, specifier) => `${prefix}${resolve(specifier)}"`);
+  return source.replace(
+    SPECIFIER_PATTERN,
+    (match, prefix, specifier) => `${prefix}${resolve(specifier)}"`,
+  );
 }
 
 export function resolveSpecifier(fromPath, specifier) {
   const target = specifier.split("?")[0];
-  return path.posix.normalize(path.posix.join(path.posix.dirname(fromPath), target));
+  return path.posix.normalize(
+    path.posix.join(path.posix.dirname(fromPath), target),
+  );
 }
 
 export function relativeSpecifier(fromPath, targetPath) {
-  const relative = path.posix.relative(path.posix.dirname(fromPath), targetPath);
+  const relative = path.posix.relative(
+    path.posix.dirname(fromPath),
+    targetPath,
+  );
   return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
@@ -42,12 +54,16 @@ export function dependencyOrder(dependencies) {
   const visit = (id, trail) => {
     if (state.get(id) === "done") return;
     if (state.get(id) === "visiting") {
-      throw new Error(`Circular module dependency: ${[...trail, id].join(" -> ")}`);
+      throw new Error(
+        `Circular module dependency: ${[...trail, id].join(" -> ")}`,
+      );
     }
     state.set(id, "visiting");
     for (const dependency of dependencies.get(id) ?? []) {
       if (!dependencies.has(dependency)) {
-        throw new Error(`${id} imports ${dependency}, which is not a build input`);
+        throw new Error(
+          `${id} imports ${dependency}, which is not a build input`,
+        );
       }
       visit(dependency, [...trail, id]);
     }

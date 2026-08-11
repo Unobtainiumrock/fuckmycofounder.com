@@ -57,3 +57,20 @@ npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2 --d1 FMC_DB=fmc-threads
 - `shared/` — validation limits shared by client and edge handlers
 - `scripts/` — the fingerprinting build that emits `dist/`
 - `assets/images/` and `assets/icons/` — social preview and favicon
+
+## Application foundation
+
+The server-rendered Next.js foundation for the planned network lives in `app/`
+and `src/`. Use Node 24.18.0 with Corepack:
+
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+`pnpm build:app` builds that application. `pnpm build` intentionally remains
+the existing static Cloudflare production build until a separately authorized
+cutover retires that deployment path. Read `AGENTS.md` before implementation;
+the canonical repository gates and disposable Postgres prerequisite are in
+`openspec/README.md`.

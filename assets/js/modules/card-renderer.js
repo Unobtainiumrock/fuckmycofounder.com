@@ -136,7 +136,7 @@ export async function renderCardBlob(report) {
   drawCanvasLines(context, disposition.lines, left, footerTop + 125, 67);
   context.fillStyle = "rgba(244,237,223,.62)";
   context.font = "700 24px monospace";
-  context.fillText("FUCKMYCOFOUNDER.COM  ·  SATIRE, OBVIOUSLY", left, HEIGHT - 67);
+  context.fillText("FUCKMYCOFOUNDER.COM", left, HEIGHT - 67);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Card rendering failed.")), "image/png");
