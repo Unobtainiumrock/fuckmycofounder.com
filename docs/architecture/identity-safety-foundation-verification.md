@@ -63,9 +63,11 @@ Change: `add-account-identity-and-safety-foundation`
 
 ## Close-out evidence
 
-Repository verification at `02c12f7` used the pinned Node 24.18.1 runtime:
+Repository verification was repeated after rebasing the implementation onto the
+approved foundation tip `621a023`. The rebased implementation tip `0c00600`
+used the pinned Node 24.18.0 runtime:
 
-- 22 legacy Caseboard/Cooked Quiz tests and 167 unit/contract tests passed.
+- 22 legacy Caseboard/Cooked Quiz tests and 170 unit/contract tests passed.
 - 15 disposable-PostgreSQL tests passed, covering clean apply, upgrade,
   repeat, rollback, populated rollback refusal, atomic audit rollback,
   concurrency, authorization, canonical state revalidation, and retention.
@@ -73,15 +75,14 @@ Repository verification at `02c12f7` used the pinned Node 24.18.1 runtime:
   static fingerprinted build, and the container smoke test passed.
 - Formatting, lint, architecture, unused-code, typecheck, source-size,
   `git diff --check`, and strict OpenSpec validation passed.
-- Browser acceptance passed the Account boundary, mobile Cooked Quiz,
-  keyboard dialog, and reduced-motion cases. The existing foundation macOS
-  acquisition snapshot remains non-green: expected 1440x2633, observed
-  1440x2659. The same mismatch reproduces on the untouched foundation branch,
-  so this change does not update that inherited visual baseline.
+- All 6 browser acceptance journeys passed: the Account boundary, desktop and
+  mobile Cooked Quiz, malformed-image rejection, maximum-text fitting,
+  keyboard dialog control, and reduced motion.
 
 Independent standards/security and OpenSpec reviews reported no residual
-repository findings and no high-severity findings after their final pass at
-`02c12f7`. Earlier findings were corrected before close-out, including
+repository findings and no high-severity findings after their original final
+pass. A fresh review of the rebased range is required before publication.
+Earlier findings were corrected before close-out, including
 canonical session reauthentication, Account self-targeting, claim and appeal
 eligibility, abuse routing, report lifecycle ownership, audit derivation,
 restricted-reveal coupling and case/linkage binding, and explicit claimed-

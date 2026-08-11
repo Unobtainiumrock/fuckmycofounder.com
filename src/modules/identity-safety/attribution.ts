@@ -7,6 +7,7 @@ import type {
   PublicClaimProjection,
   RestrictedAttributionProjection,
 } from "./model";
+import { blockApplies } from "./moderation";
 
 const reservedLabels = new Set([
   "anonymous reviewer",
@@ -65,9 +66,26 @@ export function publicBylineProjection(
     readonly claim: ProfileClaim | null;
     readonly recoveryReverificationRequired: boolean;
     readonly claimReverificationRequired: boolean;
+    readonly viewerAccountId?: string;
+    readonly blockedPairs?: readonly {
+      readonly blockerId: string;
+      readonly blockedId: string;
+    }[];
   },
 ): PublicBylineProjection | null {
   if (account.state === "deleted") return null;
+  if (
+    blockApplies({
+      ...(eligibility.viewerAccountId
+        ? { viewerAccountId: eligibility.viewerAccountId }
+        : {}),
+      actorAccountId: account.id,
+      blockedPairs: eligibility.blockedPairs ?? [],
+      surface: "named-byline",
+    })
+  ) {
+    return null;
+  }
   const profileId = byline.profileId;
   const claimProjection = profileId
     ? publicClaimProjection(profileId, eligibility.claim, {
@@ -106,6 +124,11 @@ export function projectAttribution(input: {
   readonly claim?: ProfileClaim | null;
   readonly recoveryReverificationRequired?: boolean;
   readonly claimReverificationRequired?: boolean;
+  readonly viewerAccountId?: string;
+  readonly blockedPairs?: readonly {
+    readonly blockerId: string;
+    readonly blockedId: string;
+  }[];
 }): PublicAttributionProjection {
   if (!input.available) {
     return { kind: "withheld", code: "attribution-unavailable" };
@@ -119,6 +142,10 @@ export function projectAttribution(input: {
       recoveryReverificationRequired:
         input.recoveryReverificationRequired ?? true,
       claimReverificationRequired: input.claimReverificationRequired ?? true,
+      ...(input.viewerAccountId
+        ? { viewerAccountId: input.viewerAccountId }
+        : {}),
+      ...(input.blockedPairs ? { blockedPairs: input.blockedPairs } : {}),
     }) ?? {
       kind: "withheld",
       code: "attribution-unavailable",

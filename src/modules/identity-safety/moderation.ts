@@ -21,6 +21,7 @@ export function blockApplies(input: {
   }[];
   readonly surface:
     | "public"
+    | "named-byline"
     | "direct-interaction"
     | "targeted-discovery"
     | "notification";

@@ -141,6 +141,42 @@ describe("Public Bylines and attribution", () => {
     ).toEqual({ kind: "named", displayName: "Ada Founder" });
   });
 
+  it("withholds a named byline from either Account in a blocked relationship", () => {
+    const blockedPairs = [
+      { blockerId: "viewer-account", blockedId: account.id },
+    ];
+
+    expect(
+      projectAttribution({
+        mode: "named",
+        available: true,
+        account,
+        byline,
+        viewerAccountId: "viewer-account",
+        blockedPairs,
+      }),
+    ).toEqual({ kind: "withheld", code: "attribution-unavailable" });
+    expect(
+      projectAttribution({
+        mode: "named",
+        available: true,
+        account: { ...account, id: "viewer-account" },
+        byline: { ...byline, accountId: "viewer-account" },
+        viewerAccountId: account.id,
+        blockedPairs,
+      }),
+    ).toEqual({ kind: "withheld", code: "attribution-unavailable" });
+    expect(
+      projectAttribution({
+        mode: "named",
+        available: true,
+        account,
+        byline,
+        blockedPairs,
+      }),
+    ).toEqual({ kind: "named", displayName: "Ada Founder" });
+  });
+
   it("uses one fail-closed anonymous isolation seam across all downstream surfaces", () => {
     const anonymous = projectAttribution({
       mode: "anonymous",
