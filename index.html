@@ -89,7 +89,7 @@
         <ol class="process__steps">
           <li><span>01</span><strong>Pick the charge</strong><small>Equity amnesia? Pivot addiction? Weaponized “quick sync”?</small></li>
           <li><span>02</span><strong>Remove the identifiers</strong><small>No names, handles, links, companies, or courtroom exhibits.</small></li>
-          <li><span>03</span><strong>Share the case file</strong><small>Download the card or send a link with the mugshot attached.</small></li>
+          <li><span>03</span><strong>Post it or pocket it</strong><small>Put it on the public Town Board, or just keep the card and the link.</small></li>
         </ol>
       </section>
 
@@ -97,18 +97,21 @@
         <div class="board-entry__copy">
           <p class="eyebrow">PUBLIC RECORD / VIBES JURISDICTION</p>
           <h2 id="board-entry-title">The Town Board</h2>
-          <p>Live filings live on their own page. Finish a report and share it to land there automatically — or come back with your board key.</p>
+          <p>Every filing is public. Read the whole record without filing anything — then file your own when you are ready.</p>
           <p class="board-entry__returning" data-board-entry-returning hidden>You’re already on the docket. Jump back in.</p>
         </div>
         <div class="board-entry__actions">
           <a class="button button--red" href="/board" data-board-entry-open>Visit the Town Board <span aria-hidden="true">→</span></a>
           <form class="board-entry__reclaim" data-board-entry-reclaim>
-            <label class="board-entry__label" for="landing-board-key">Returning? Enter your board key</label>
+            <label class="board-entry__label" for="landing-board-key">Have a board key? Find your filing</label>
             <div class="board-entry__row">
               <input id="landing-board-key" class="board-entry__input" name="boardKey" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="FMC-ABC2345" maxlength="20" data-board-entry-input>
-              <button class="button button--outline" type="submit" data-board-entry-submit>Unseal</button>
+              <button class="button button--outline" type="submit" data-board-entry-submit>Find it</button>
             </div>
             <p class="board-entry__error" data-board-entry-error role="status" aria-live="polite"></p>
+            <div class="board-entry__rescue" data-board-entry-rescue hidden>
+              <button class="button button--red" type="button" data-board-entry-post>Post it to the board now</button>
+            </div>
           </form>
         </div>
       </section>
@@ -253,11 +256,13 @@
             </article>
 
             <div class="share-actions">
-              <button class="button button--red" type="button" data-share-report>Share the evidence*</button>
+              <button class="button button--red" type="button" data-post-board data-posted="false" hidden>Post to the Town Board</button>
+              <button class="button button--outline" type="button" data-share-report>Share</button>
               <button class="button button--outline" type="button" data-download-report>Download card</button>
-              <button class="button button--outline" type="button" data-copy-link>Copy private-ish link</button>
+              <button class="button button--outline" type="button" data-copy-link>Copy link</button>
             </div>
-            <p class="share-note">*Sharing posts your case to the Town Board and takes you there. Your <strong>CASE #</strong> is the board key for later visits. Still no names, still satire.</p>
+            <p class="share-note" data-posted-note hidden>Live on the public record. Anyone can read it; only you have the board key.</p>
+            <p class="share-note">Posting puts your case on the public Town Board. Sharing, downloading, and copying the link do not — they are yours to send around. Your <strong>CASE #</strong> is the board key if you need to find this later. Still no names, still satire.</p>
             <div class="toast" data-toast role="status" aria-live="polite"></div>
           </section>
         </form>

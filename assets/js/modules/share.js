@@ -45,22 +45,31 @@ export async function downloadReportCard(report) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function goToTownBoard() {
+export function goToTownBoard() {
   window.location.assign(BOARD_PATH);
 }
 
-export async function shareReport(report) {
-  let posted = false;
-  if (report.persisted) {
-    try {
-      await publishCase(report.id);
-      markStoryShared(report.id);
-      posted = true;
-    } catch {
-      // Board post failing should never block the native share.
-    }
+/**
+ * Post a filing to the Town Board. This is the ONLY thing that publishes, and
+ * it does nothing else — no share sheet, no navigation. A failure here is
+ * reported to the caller rather than swallowed: telling someone to re-file
+ * would mint a second case id and orphan the first.
+ */
+export async function postToBoard(report) {
+  if (!report.persisted) {
+    throw new Error("This case only lives in your link. Re-file it while the archive is online to post it.");
   }
 
+  const result = await publishCase(report.id);
+  markStoryShared(report.id);
+  return {
+    publishedAt: result.publishedAt,
+    alreadyPublished: Boolean(result.alreadyPublished)
+  };
+}
+
+/** Hand the case file to the OS share sheet. Never publishes. */
+export async function shareReport(report) {
   const url = buildShareUrl(report);
   const blob = await cardBlob(report);
   const file = new File([blob], `${report.id.toLowerCase()}-incident-report.png`, { type: "image/png" });
@@ -70,29 +79,15 @@ export async function shareReport(report) {
     url
   };
 
-  let sharedNatively = false;
-  try {
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ ...shareData, files: [file] });
-      sharedNatively = true;
-    } else if (navigator.share) {
-      await navigator.share(shareData);
-      sharedNatively = true;
-    } else {
-      await navigator.clipboard.writeText(url);
-    }
-  } catch (error) {
-    // Cancelled share sheet after a successful post still earns the board.
-    if (posted) goToTownBoard();
-    throw error;
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ ...shareData, files: [file] });
+    return "Shared.";
+  }
+  if (navigator.share) {
+    await navigator.share(shareData);
+    return "Shared.";
   }
 
-  if (posted) {
-    goToTownBoard();
-    return `Posted to the Town Board. Board key: ${report.id}.`;
-  }
-
-  return sharedNatively
-    ? "Shared. File again and share to reach the Town Board."
-    : "Link copied. Share the evidence to post it to the Town Board.";
+  await navigator.clipboard.writeText(url);
+  return "No share sheet here — link copied instead.";
 }

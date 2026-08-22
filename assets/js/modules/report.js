@@ -30,7 +30,8 @@ export function buildReport(payload) {
     disposition: DISPOSITIONS[(hash >>> 5) % DISPOSITIONS.length],
     avatarUrl: payload.avatarUrl ?? null,
     cardUrl: payload.cardUrl ?? null,
-    persisted: Boolean(payload.persisted)
+    persisted: Boolean(payload.persisted),
+    published: Boolean(payload.published)
   };
 }
 

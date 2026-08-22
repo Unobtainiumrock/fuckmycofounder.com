@@ -4,7 +4,7 @@ import { decodeCaseFragment, decodeReportFragment, parseCasePath } from "./codec
 import { avatarPreviewUrl, fileToAvatarBlob } from "./avatar.js";
 import { buildReport, renderReport } from "./report.js";
 import { markStoryShared } from "./feed.js";
-import { copyReportLink, downloadReportCard, shareReport } from "./share.js";
+import { copyReportLink, downloadReportCard, goToTownBoard, postToBoard, shareReport } from "./share.js";
 import { clampFieldValue, enforceFieldLimit, FIELD_LIMITS, normalizeText, validateStatement } from "./validation.js";
 
 export function initializeReportDialog() {
@@ -124,6 +124,18 @@ export function initializeReportDialog() {
     return valid;
   }
 
+  function resetPostState(report) {
+    const postButton = dialog.querySelector("[data-post-board]");
+    const postedNote = dialog.querySelector("[data-posted-note]");
+    if (postButton) {
+      const posted = Boolean(report?.published);
+      postButton.dataset.posted = posted ? "true" : "false";
+      postButton.textContent = posted ? "View on the Town Board \u2192" : "Post to the Town Board";
+      postButton.hidden = !report?.persisted;
+    }
+    if (postedNote) postedNote.hidden = !report?.published;
+  }
+
   function displayReport(report) {
     currentReport = report;
     // Render into the result card specifically: the dialog also contains the
@@ -131,6 +143,7 @@ export function initializeReportDialog() {
     renderReport(report, dialog.querySelector("[data-case-file]"));
     showStep(3);
     openDialog();
+    resetPostState(report);
     if (report.persisted) {
       history.replaceState(null, "", `/c/${report.id}`);
     }
@@ -174,9 +187,9 @@ export function initializeReportDialog() {
       id: data.id,
       avatarUrl: data.avatarUrl,
       cardUrl: data.cardUrl,
-      persisted: true
+      persisted: true,
+      published: Boolean(data.publishedAt)
     }));
-    // Revisiting a published case link also unseals the Town Board.
     if (data.publishedAt) markStoryShared(data.id);
   }
 
@@ -306,6 +319,35 @@ export function initializeReportDialog() {
       submitButton.disabled = false;
       submitButton.textContent = "Generate case file ↗";
     }
+  });
+
+  const postButton = dialog.querySelector("[data-post-board]");
+  const postedNote = dialog.querySelector("[data-posted-note]");
+
+  function markPosted() {
+    if (postButton) {
+      postButton.dataset.posted = "true";
+      postButton.textContent = "View on the Town Board \u2192";
+    }
+    if (postedNote) postedNote.hidden = false;
+  }
+
+  postButton?.addEventListener("click", (event) => {
+    if (!currentReport) return;
+    // Once posted the button becomes plain navigation, so a second click
+    // never re-posts and never blocks on the network.
+    if (postButton.dataset.posted === "true") {
+      goToTownBoard();
+      return;
+    }
+    withBusy(event.currentTarget, async () => {
+      const { alreadyPublished } = await postToBoard(currentReport);
+      currentReport = { ...currentReport, published: true };
+      markPosted();
+      return alreadyPublished
+        ? "Already on the board. Board key: " + currentReport.id + "."
+        : "Posted to the Town Board. Board key: " + currentReport.id + ".";
+    });
   });
 
   dialog.querySelector("[data-share-report]").addEventListener("click", (event) => {

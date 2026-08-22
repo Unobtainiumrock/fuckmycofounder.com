@@ -25,8 +25,12 @@ export function markStoryShared(caseId) {
   document.dispatchEvent(new CustomEvent(STORY_SHARED_EVENT, { detail: { caseId } }));
 }
 
-/** Verify a published case and unseal the Town Board for this browser. */
-export async function reclaimBoardAccess(rawId) {
+/**
+ * Look up a filing by its board key. The board itself is public now, so this
+ * is no longer an access gate — it is how someone finds their own case, and
+ * how a filing that was generated but never posted gets rescued.
+ */
+export async function lookupBoardKey(rawId) {
   const id = normalizeCaseId(rawId);
   if (!id) {
     throw new Error("Enter a case id like FMC-ABC2345.");
@@ -39,12 +43,16 @@ export async function reclaimBoardAccess(rawId) {
     throw new Error("That case file expired or never existed.");
   }
 
-  if (!data.publishedAt) {
-    throw new Error("Filed, but not posted yet. Hit Share the evidence first.");
-  }
+  if (data.publishedAt) markStoryShared(id);
+  return { id, publishedAt: data.publishedAt ?? null };
+}
 
+/** Post a filing that was generated but never made it to the board. */
+export async function publishBoardKey(id) {
+  const { publishCase } = await import("./api.js");
+  const result = await publishCase(id);
   markStoryShared(id);
-  return id;
+  return result;
 }
 
 function formatDate(iso) {
@@ -107,21 +115,15 @@ export function initializeBoard() {
   const board = document.querySelector("[data-board]");
   if (!board) return;
 
-  const locked = board.querySelector("[data-board-locked]");
   const feed = board.querySelector("[data-board-feed]");
   const status = board.querySelector("[data-board-status]");
   const moreButton = board.querySelector("[data-board-more]");
   const endNote = board.querySelector("[data-board-end]");
   const sentinel = board.querySelector("[data-board-sentinel]");
-  const reclaimForm = board.querySelector("[data-board-reclaim]");
-  const reclaimInput = board.querySelector("[data-board-reclaim-input]");
-  const reclaimError = board.querySelector("[data-board-reclaim-error]");
-  const reclaimButton = board.querySelector("[data-board-reclaim-submit]");
 
   let cursor = null;
   let complete = false;
   let loading = false;
-  let unlocked = false;
 
   async function loadPage() {
     if (loading || complete) return;
@@ -157,41 +159,14 @@ export function initializeBoard() {
     }
   }
 
-  function unlock() {
-    if (unlocked) return;
-    unlocked = true;
-    locked.hidden = true;
-    feed.hidden = false;
-    loadPage();
-  }
-
   moreButton.addEventListener("click", loadPage);
 
   if ("IntersectionObserver" in window) {
     new IntersectionObserver((entries) => {
-      if (unlocked && entries.some(({ isIntersecting }) => isIntersecting)) loadPage();
+      if (entries.some(({ isIntersecting }) => isIntersecting)) loadPage();
     }, { rootMargin: "600px 0px" }).observe(sentinel);
   }
 
-  reclaimForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!reclaimInput || !reclaimButton) return;
-    if (reclaimError) reclaimError.textContent = "";
-    reclaimButton.disabled = true;
-    const original = reclaimButton.textContent;
-    reclaimButton.textContent = "Checking the docket…";
-    try {
-      await reclaimBoardAccess(reclaimInput.value);
-      reclaimInput.value = "";
-    } catch (error) {
-      if (reclaimError) reclaimError.textContent = error?.message ?? "Could not unseal the board.";
-    } finally {
-      reclaimButton.disabled = false;
-      reclaimButton.textContent = original;
-    }
-  });
-
-  document.addEventListener(STORY_SHARED_EVENT, unlock);
-  if (hasSharedStory()) unlock();
-  else status.textContent = "SEALED PENDING YOUR TESTIMONY";
+  // The board is public: no gate, no unlock, load it for everyone.
+  loadPage();
 }
