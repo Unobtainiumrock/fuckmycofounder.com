@@ -46,6 +46,39 @@ Local static preview (`python3 -m http.server`) serves the UI only; `POST /api/c
 npx wrangler pages dev . --kv FMC_CASES --r2 FMC_R2 --d1 FMC_DB=fmc-threads
 ```
 
+## Retention and takedown
+
+Nothing on the Town Board expires. Cases and feed keys are written to KV with
+no `expirationTtl`, and the D1 comment threads have no expiry either, so a
+filing and its corroboration stay consistent with each other indefinitely.
+Rate-limit counters (`rl:` keys) still expire after two hours — they are a
+counter, not content.
+
+**There is no unpublish.** Posting is deliberately one-way: the report dialog
+arms the button and states that the post is permanent before the second click
+commits it. That means removal is an operator action, not a user-facing one.
+To take a filing down:
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID=c982ff5aa7f77c62715b25611839a9ff
+NS=f78cfdb2ee8f4e1ba6840926b4a673ad
+
+# Find the feed key for the case (the feed key embeds an inverted timestamp).
+npx wrangler kv key list --namespace-id=$NS --remote | grep FMC-XXXXXXX
+
+# Remove it from the board, then remove the case record itself.
+npx wrangler kv key delete "feed:<inverted-ts>:FMC-XXXXXXX" --namespace-id=$NS --remote
+npx wrangler kv key delete "case:FMC-XXXXXXX" --namespace-id=$NS --remote
+
+# The card PNG and mugshot live in R2, and the thread lives in D1.
+npx wrangler r2 object delete fmc-cases/cards/FMC-XXXXXXX.png --remote
+npx wrangler d1 execute fmc-threads --remote \
+  --command "DELETE FROM comments WHERE case_id='FMC-XXXXXXX'; DELETE FROM threads WHERE case_id='FMC-XXXXXXX';"
+```
+
+Deleting only the `feed:` key pulls a case off the board while leaving its
+permalink at `/c/<id>` working; delete the `case:` key too for a full removal.
+
 ## Structure
 
 - `index.html` — semantic page shell and report dialog
