@@ -65,7 +65,7 @@ export async function onRequestPost(context) {
     record.avatarKey = avatarKey;
   }
 
-  await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record), { expirationTtl: 60 * 60 * 24 * 90 });
+  await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record));
 
   return json({
     ...publicCase(env, request, record),

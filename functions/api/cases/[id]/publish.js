@@ -1,6 +1,6 @@
 import { getCaseRecord, isValidCaseId } from "../../../_shared/case-store.js";
 import { error, json } from "../../../_shared/env.js";
-import { FEED_TTL_SECONDS, feedKeyFor, feedSnapshot } from "../../../_shared/feed-store.js";
+import { feedKeyFor, feedSnapshot } from "../../../_shared/feed-store.js";
 import { ensureThread } from "../../../_shared/thread-store.js";
 
 export async function onRequestPost(context) {
@@ -20,10 +20,8 @@ export async function onRequestPost(context) {
   const publishedAt = new Date().toISOString();
   record.publishedAt = publishedAt;
 
-  await env.FMC_CASES.put(feedKeyFor(id, Date.parse(publishedAt)), JSON.stringify(feedSnapshot(record, publishedAt)), {
-    expirationTtl: FEED_TTL_SECONDS
-  });
-  await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record), { expirationTtl: FEED_TTL_SECONDS });
+  await env.FMC_CASES.put(feedKeyFor(id, Date.parse(publishedAt)), JSON.stringify(feedSnapshot(record, publishedAt)));
+  await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record));
   if (env.FMC_DB) await ensureThread(env, id, publishedAt);
 
   return json({ id, publishedAt, alreadyPublished: false }, 201);

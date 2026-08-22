@@ -34,7 +34,7 @@ export async function onRequestPut(context) {
     httpMetadata: { contentType: "image/png" }
   });
   record.cardKey = cardKey;
-  await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record), { expirationTtl: 60 * 60 * 24 * 90 });
+  await env.FMC_CASES.put(`case:${id}`, JSON.stringify(record));
 
   const urls = publicCase(env, request, record);
   return json(urls);

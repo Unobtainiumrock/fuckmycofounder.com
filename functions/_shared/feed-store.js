@@ -1,5 +1,9 @@
 export const FEED_PREFIX = "feed:";
-export const FEED_TTL_SECONDS = 60 * 60 * 24 * 90;
+
+// Nothing on the board expires. A public record that quietly deletes itself
+// after 90 days is not a record, and the D1 comment threads have no expiry --
+// so an expiring case left orphaned corroboration pointing at a case id that
+// no longer existed. Rate-limit counters still expire; they are not content.
 
 // Lexicographic order of inverted timestamps yields newest-first KV listings.
 const TIMESTAMP_MAX = 9_999_999_999_999;

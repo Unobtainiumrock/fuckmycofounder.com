@@ -130,10 +130,13 @@ export function initializeReportDialog() {
     if (postButton) {
       const posted = Boolean(report?.published);
       postButton.dataset.posted = posted ? "true" : "false";
+      postButton.dataset.armed = "false";
       postButton.textContent = posted ? "View on the Town Board \u2192" : "Post to the Town Board";
       postButton.hidden = !report?.persisted;
     }
     if (postedNote) postedNote.hidden = !report?.published;
+    const warning = dialog.querySelector("[data-permanent-warning]");
+    if (warning) warning.hidden = true;
   }
 
   function displayReport(report) {
@@ -193,17 +196,22 @@ export function initializeReportDialog() {
     if (data.publishedAt) markStoryShared(data.id);
   }
 
+  const BUSY_LABEL = "Processing emotional paperwork…";
+
   async function withBusy(button, action) {
     const original = button.textContent;
     button.disabled = true;
-    button.textContent = "Processing emotional paperwork…";
+    button.textContent = BUSY_LABEL;
     try {
       toast.textContent = await action();
     } catch (error) {
       if (error?.name !== "AbortError") toast.textContent = error?.message ?? "The paperwork jammed. Try the download button.";
     } finally {
       button.disabled = false;
-      button.textContent = original;
+      // Only roll back the busy text. An action that deliberately relabelled
+      // the button -- posting swaps it to "View on the Town Board" -- keeps the
+      // label it chose, instead of being reverted to the pre-click one.
+      if (button.textContent === BUSY_LABEL) button.textContent = original;
     }
   }
 
@@ -219,13 +227,21 @@ export function initializeReportDialog() {
     if (event.target === dialog) closeDialog();
   });
 
-  dialog.querySelector('[data-next="2"]').addEventListener("click", () => {
+  function advanceToStatement() {
     const selected = form.elements.charge.value;
     dialog.querySelector("[data-charge-error]").textContent = selected ? "" : "Pick one count of cofounder nonsense.";
-    if (selected) {
-      showStep(2);
-      updateLivePreview();
-    }
+    if (!selected) return;
+    showStep(2);
+    updateLivePreview();
+  }
+
+  dialog.querySelector('[data-next="2"]').addEventListener("click", advanceToStatement);
+
+  // Step one holds a single choice, so picking a charge is the whole step.
+  // Advance on selection rather than making people confirm a radio button;
+  // "Back" is still there and keeps the selection, so nothing is one-way.
+  chargeGrid.addEventListener("change", (event) => {
+    if (event.target?.name === "charge") advanceToStatement();
   });
   dialog.querySelector('[data-back="1"]').addEventListener("click", () => showStep(1));
   dialog.querySelector("[data-start-over]").addEventListener("click", resetReport);
@@ -323,13 +339,26 @@ export function initializeReportDialog() {
 
   const postButton = dialog.querySelector("[data-post-board]");
   const postedNote = dialog.querySelector("[data-posted-note]");
+  const permanentWarning = dialog.querySelector("[data-permanent-warning]");
 
   function markPosted() {
+    if (permanentWarning) permanentWarning.hidden = true;
     if (postButton) {
       postButton.dataset.posted = "true";
+      postButton.dataset.armed = "false";
       postButton.textContent = "View on the Town Board \u2192";
     }
     if (postedNote) postedNote.hidden = false;
+  }
+
+  let armTimer = null;
+
+  function disarmPost() {
+    if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+    if (!postButton || postButton.dataset.posted === "true") return;
+    postButton.dataset.armed = "false";
+    postButton.textContent = "Post to the Town Board";
+    if (permanentWarning) permanentWarning.hidden = true;
   }
 
   postButton?.addEventListener("click", (event) => {
@@ -340,6 +369,16 @@ export function initializeReportDialog() {
       goToTownBoard();
       return;
     }
+    // Posting is permanent and public. There is no unpublish, so the second
+    // click is the last chance to not do it.
+    if (postButton.dataset.armed !== "true") {
+      postButton.dataset.armed = "true";
+      postButton.textContent = "Yes \u2014 post it permanently";
+      if (permanentWarning) permanentWarning.hidden = false;
+      armTimer = setTimeout(disarmPost, 6000);
+      return;
+    }
+    if (armTimer) { clearTimeout(armTimer); armTimer = null; }
     withBusy(event.currentTarget, async () => {
       const { alreadyPublished } = await postToBoard(currentReport);
       currentReport = { ...currentReport, published: true };
